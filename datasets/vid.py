@@ -6,7 +6,7 @@ Created on Fri Jun 26 22:58:34 2020
 """
 
 from __future__ import absolute_import, print_function
-
+import ipdb
 import os
 import glob
 import six
@@ -69,7 +69,6 @@ class ImageNetVID(object):
         else:
             seq_dir, frames = self.seq_dict[seq_name]
             img_files = [os.path.join(seq_dir, '%06d.JPEG' % f) for f in frames]
-
             return img_files, seq_name
 
     def __len__(self):
@@ -85,7 +84,6 @@ class ImageNetVID(object):
         
         if self.neg_dir:
             neg_dict = json.load(open(self.neg_dir), object_pairs_hook=OrderedDict)
-        
         # image and annotation paths
         print('Gather sequence paths...')
         seq_dirs = []
@@ -113,16 +111,20 @@ class ImageNetVID(object):
             
             
             if self.neg_dir:
+                #ipdb.set_trace()
                 neg_cluster_id = neg_dict[seq_name]
-                frames_num = len(glob.glob(seq_dirs[s] + '\*'))
+                frames_num = len(glob.glob(seq_dirs[s] + '/*'))
                 # store paths
                 seq_dict.update([(key, [seq_dirs[s], list(map(int, np.arange(frames_num))), neg_cluster_id])])
             else:
-                frames_num = len(glob.glob(seq_dirs[s] + '\*'))
+                #ipdb.set_trace()
+                frames_num = len(glob.glob(seq_dirs[s] + '/*'))
                 # store paths
                 seq_dict.update([(key, [seq_dirs[s], list(map(int, np.arange(frames_num)))])])
-        
+
+
         # store seq_dict
+        #ipdb.set_trace()
         with open(cache_file, 'w') as f:
             json.dump(seq_dict, f, indent=4)
 

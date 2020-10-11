@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import ipdb
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -459,7 +460,8 @@ class TrackerSiamFC(Tracker):
         dataset = Pair(
             seqs=seqs,
             transforms=transforms, supervised=supervised, img_loader=cv2_RGB_loader, neg=self.cfg.neg)
-        
+
+
         # setup dataloader
         dataloader = DataLoader(
             dataset,
@@ -477,8 +479,9 @@ class TrackerSiamFC(Tracker):
             
 
             # loop over dataloader
+            ipdb.set_trace()
             for it, batch in enumerate(dataloader):
-                
+
 #                torchvision.utils.save_image(batch[0][0], 'test0.png')
 #                torchvision.utils.save_image(batch[1][0], 'test1.png')
 #                raise ""

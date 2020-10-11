@@ -6,6 +6,7 @@ import cv2
 import json
 from torch.utils.data import Dataset
 from collections import OrderedDict
+import ipdb
 
 __all__ = ['Pair']
 
@@ -22,7 +23,6 @@ class Pair(Dataset):
         self.supervised = supervised
         self.rangeup = 10
         self.neg = neg
-        
         if self.neg:
             self.cluster_dict = json.load(open('./cluster_dict.json'), object_pairs_hook=OrderedDict)
 
@@ -33,7 +33,7 @@ class Pair(Dataset):
             img_files, seq_name, cluster_id = self.seqs[index] #[:2]
         else:
             img_files, seq_name = self.seqs[index] 
-            
+
 
         if self.supervised == 'self-supervised':
             neg = self.neg and self.neg > np.random.rand()
@@ -50,7 +50,6 @@ class Pair(Dataset):
                 img_files_neg = [os.path.join(seq_dir_neg, '%06d.JPEG' % f) for f in frames_neg]
                 
                 random_fid_neg = np.random.choice(len(img_files_neg))
-                
 
 # =============================================================================
 #                 random_vid_neg = np.random.choice(len(self))
