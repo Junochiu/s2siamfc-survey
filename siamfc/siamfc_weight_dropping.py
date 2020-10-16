@@ -517,7 +517,11 @@ class TrackerSiamFC(Tracker):
             torch.save(self.net.state_dict(), net_path)
         
         json.dump(self.cfg._asdict(), open(os.path.join(save_dir, 'config.json'), 'w'), indent=4)
-    
+
+
+    #def meta_train_over(self,seqs,val_seqs=None,save_dir='pretrained',supervised='supervised'):
+
+
     def _create_labels(self, size):
         def logistic_labels(x, y, r_pos, r_neg):
             dist = np.abs(x) + np.abs(y)  # block distance

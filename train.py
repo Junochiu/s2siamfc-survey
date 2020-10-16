@@ -47,5 +47,5 @@ if __name__ == '__main__':
     
     tracker = TrackerSiamFC(loss_setting=[0.5, 2.0, 0])
     tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
-
+    #tracker.meta_train_over(seqs, supervised=mode[1], save_dir=save_path)
     print(strftime("%Y-%m-%d %H:%M:%neg_dirS", localtime()))
