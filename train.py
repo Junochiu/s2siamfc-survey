@@ -10,7 +10,9 @@ import random
 
 #from siamfc.ssiamfc import TrackerSiamFC 
 #from siamfc.siamfc_stn import TrackerSiamFC 
-from siamfc.siamfc_weight_dropping import TrackerSiamFC 
+from siamfc.siamfc_weight_dropping import TrackerSiamFC
+#from siamfc.siamfc_weight_dropping_maml import TrackerSiamFC
+
 
 import ipdb
 import torch
@@ -44,7 +46,7 @@ if __name__ == '__main__':
 # =============================================================================
     
     mode = ['supervised', 'self-supervised']
-    
+    #net_path = os.path.join('pretrain','eccv_best','siamfc_alexnet_e50.pth')
     tracker = TrackerSiamFC(loss_setting=[0.5, 2.0, 0])
     tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
     #tracker.meta_train_over(seqs, supervised=mode[1], save_dir=save_path)
