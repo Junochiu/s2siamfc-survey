@@ -24,6 +24,7 @@ from siamfc.transforms import SiamFCTransforms
 from torch.utils.data import DataLoader
 from utils.img_loader import cv2_RGB_loader
 from siamfc.datasets import Pair
+from torch.utils.tensorboard import SummaryWriter
 
 import ipdb
 import torch
@@ -186,11 +187,11 @@ class maml_trainer(nn.Module):
 
         return names_weights_copy
 
-    def get_across_task_loss_metrics(self, total_losses, total_accuracies):
+    def get_across_task_loss_metrics(self, total_losses):
         losses = dict()
 
         losses['loss'] = torch.mean(torch.stack(total_losses))
-        losses['accuracy'] = np.mean(total_accuracies)
+
 
         return losses
 
@@ -298,6 +299,8 @@ class maml_trainer(nn.Module):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
+        writer = SummaryWriter('runs/maml_first_try')
+
         # setup dataset
         transforms = SiamFCTransforms(
             exemplar_sz=self.cfg.exemplar_sz,
@@ -336,6 +339,7 @@ class maml_trainer(nn.Module):
                     query_batch, support_loss, responses = self.tracker.train_step(self.model, batch,
                                                                                    names_weights_copy, phase='support',
                                                                                    num_step=num_step)  # extract query dataset from here
+                    writer.add_scalar('support_loss', support_loss, it * self.maml_args.num_steps + num_step)
                     print("===train stepped")
                     print("==========support loss = {}".format(support_loss))
                     names_weights_copy = self.apply_inner_loop_update(loss=support_loss,
@@ -349,6 +353,7 @@ class maml_trainer(nn.Module):
                         query_loss, responses = self.tracker.train_step(self.model, query_batch,
                                                                         names_weight_copy=names_weights_copy,
                                                                         phase='query', num_step=num_step)
+                        writer.add_scalar('query_loss', query_loss, it * self.maml_args.num_steps + num_step)
                         query_losses.append(per_step_loss_importance_vectors[num_step] * query_loss)
                         print("===query step")
                         print("==========query loss = {}".format(support_loss))
@@ -357,6 +362,7 @@ class maml_trainer(nn.Module):
                             query_loss, responses = self.tracker.train_step(query_batch, names_weights_copy,
                                                                             phase='query')
                             query_losses.append(query_loss)
+                            writer.add_scalar('query_loss',query_loss,it*self.maml_args.num_steps+num_step)
                             print("===query step")
                             print("==========query loss = {}".format(support_loss))
                 task_losses = torch.sum(torch.stack(query_losses))
@@ -377,8 +383,12 @@ class maml_trainer(nn.Module):
                     self.zero_grad()
 
             self.current_iter = self.current_iter + 1
+            losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+            loss = losses['loss']
+            writer.add_scalar('iter_loss', loss, self.current_iter)
             if self.current_iter % self.maml_args.total_iter_per_epoch == 0:
                 self.current_epoch = self.current_epoch + 1
+                writer.add_scalar('epoch_loss', loss, self.current_epoch)
                 self.save_model(os.path.join(self.save_dir,"epoch{}.pth".format(self.current_epoch)),self.model.state_dict)
             '''
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
