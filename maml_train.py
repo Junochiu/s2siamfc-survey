@@ -44,6 +44,10 @@ class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
 
+        self.model = Net(
+            backbone=AlexNet(args=self.maml_args),
+            head=SiamFC(device=self.device, args=self.maml_args))
+
         # device setting initialization
         self.cuda = torch.cuda.is_available()
         # self.device = torch.device('cuda:0' if self.cuda else 'cpu')
@@ -67,9 +71,7 @@ class maml_trainer(nn.Module):
         # inner tracker related initialization
         self.maml_args = self.parse_maml_args()
 
-        self.model = Net(
-            backbone=AlexNet(args=self.maml_args),
-            head=SiamFC(device=self.device, args=self.maml_args))
+
         self.load_pretrain()
         ops.init_weights(self.model)
 
