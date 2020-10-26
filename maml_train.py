@@ -60,7 +60,7 @@ class maml_trainer(nn.Module):
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/'
+        self.save_dir = './checkpoints/maml/'
         self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
 
         # inner tracker related initialization
@@ -195,7 +195,7 @@ class maml_trainer(nn.Module):
         return losses
 
     def load_pretrain(self):
-        filepath = os.path.join(".", "pretrain", "eccv_best", "siamfc_alexnet_e49.pth")
+        filepath = os.path.join(".", "pretrain", "eccv_best", "siamfc_alexnet_e50.pth")
         if torch.cuda.is_available():
             self.state_dict = torch.load(filepath)
         else:
@@ -229,7 +229,7 @@ class maml_trainer(nn.Module):
             'number_of_training_steps_per_iter': 5,
             'enable_inner_loop_optimizable_bn_params': True,  # not sure what this is meant for
             'total_epochs': 10,
-            'total_iter_per_epoch': 100,
+            'total_iter_per_epoch': 20,
             'task_learning_rate': 0.001,  # need to check out from maml github
             'total_num_inner_loop_steps': 5,  # need to check out from maml github
             'use_second_order': True,
@@ -323,9 +323,9 @@ class maml_trainer(nn.Module):
         total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
             self.model.zero_grad()
-            print("into while")
             for it, batch in enumerate(dataloader):
-                print("into batch")
+                print("------------------------------------------------------")
+                print("current it = {}".format(it))
                 query_losses = []
                 data_time = time.time() - end
                 per_step_loss_importance_vectors = self.get_per_step_loss_importance_vector()
@@ -363,22 +363,31 @@ class maml_trainer(nn.Module):
                 total_losses.append(task_losses)
                 if not training_phase:
                     self.model.restore_backup_stats()
+                if it % self.maml_args.batches_per_iter == 0:
+                    print("===outer_loop_updated")
+                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+                    for idx, item in enumerate(per_step_loss_importance_vectors):
+                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                    self.optimizer.zero_grad()
+                    loss = losses['loss']
+                    loss.backward()  # check out the loss here
+                    self.optimizer.step()
+                    losses['learning_rate'] = self.scheduler.get_lr()[0]
+                    self.optimizer.zero_grad()
+                    self.zero_grad()
+
             self.current_iter = self.current_iter + 1
             if self.current_iter % self.maml_args.total_iter_per_epoch == 0:
                 self.current_epoch = self.current_epoch + 1
+                self.save_model(os.path.join(self.save_dir,"epoch{}.pth".format(self.current_epoch)),self.model.state_dict)
+            '''
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
             for idx, item in enumerate(per_step_loss_importance_vectors):
                 losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-
+            '''
             #self.meta_update(loss=losses['loss'])
-            if it % self.maml_args.batches_per_iter == 0:
-                self.optimizer.zero_grad()
-                loss = losses['loss']
-                loss.backward()  # check out the loss here
-                self.optimizer.step()
-                losses['learning_rate'] = self.scheduler.get_lr()[0]
-                self.optimizer.zero_grad()
-                self.zero_grad()
+
+
 
         # run inner loop (support set) + returning query set
         # inner loop update
