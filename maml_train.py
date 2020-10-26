@@ -378,7 +378,7 @@ class maml_trainer(nn.Module):
                     loss = losses['loss']
                     loss.backward()  # check out the loss here
                     self.optimizer.step()
-                    losses['learning_rate'] = self.scheduler.get_lr()[0]
+                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     self.optimizer.zero_grad()
                     self.zero_grad()
 
