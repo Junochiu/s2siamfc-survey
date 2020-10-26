@@ -239,6 +239,7 @@ class maml_trainer(nn.Module):
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
+            'batches_per_iter':20
         }
 
         for key, val in kwargs.items():
@@ -255,6 +256,32 @@ class maml_trainer(nn.Module):
         """
         state['network'] = self.state_dict()
         torch.save(state, f=model_save_dir)
+
+    def get_training_batches(self,seqs,supervised):
+        transforms = SiamFCTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        dataset = Pair(
+            seqs=seqs,
+            transforms=transforms, supervised=supervised, img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+
+        # setup dataloader
+        self.dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=self.cuda,
+            drop_last=True)
+
+        self.train_dataloader = DataLoader(
+            self.dataloader,
+            batch_size=self.maml_args.batches_per_iter,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=self.cuda,
+            drop_last=True)
 
     @torch.enable_grad()
     def maml_train(self, seqs, val_seqs=None,
@@ -289,6 +316,9 @@ class maml_trainer(nn.Module):
             pin_memory=self.cuda,
             drop_last=True)
 
+        # get training batches
+
+        #self.get_training_batches(seqs,supervised)
         end = time.time()
         total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
@@ -314,8 +344,6 @@ class maml_trainer(nn.Module):
                                                                       current_step_idx=num_step)
                     print("===inner_loop_updated")
                     if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
-                        ipdb.set_trace()
-
                         names_weights_copy = {key: torch.squeeze(value,0) for key, value in names_weights_copy.items()}
 
                         query_loss, responses = self.tracker.train_step(self.model, query_batch,
@@ -342,13 +370,15 @@ class maml_trainer(nn.Module):
             for idx, item in enumerate(per_step_loss_importance_vectors):
                 losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
 
-            self.meta_update(loss=losses['loss'])
-            self.optimizer.zero_grad()
-            losses.backward()  # check out the loss here
-            self.optimizer.step()
-            losses['learning_rate'] = self.scheduler.get_lr()[0]
-            self.optimizer.zero_grad()
-            self.zero_grad()
+            #self.meta_update(loss=losses['loss'])
+            if it % self.maml_args.batches_per_iter == 0:
+                self.optimizer.zero_grad()
+                loss = losses['loss']
+                loss.backward()  # check out the loss here
+                self.optimizer.step()
+                losses['learning_rate'] = self.scheduler.get_lr()[0]
+                self.optimizer.zero_grad()
+                self.zero_grad()
 
         # run inner loop (support set) + returning query set
         # inner loop update

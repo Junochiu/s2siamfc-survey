@@ -392,6 +392,8 @@ class TrackerSiamFC(Tracker):
 
             # set network mode
 
+
+        # try if we can comment these two lines
         self.net = model
         self.net.train(backward)
 
