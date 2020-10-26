@@ -51,7 +51,7 @@ class maml_trainer(nn.Module):
         if torch.cuda.is_available():
             if torch.cuda.device_count() > 1:
                 self.to(torch.cuda.current_device())
-                self.classifier = nn.DataParallel(module=self.classifier)
+                self.model = nn.DataParallel(module=self.model)
             else:
                 self.to(torch.cuda.current_device())
 
@@ -356,7 +356,7 @@ class maml_trainer(nn.Module):
                         writer.add_scalar('query_loss', query_loss, it * self.maml_args.num_steps + num_step)
                         query_losses.append(per_step_loss_importance_vectors[num_step] * query_loss)
                         print("===query step")
-                        print("==========query loss = {}".format(support_loss))
+                        print("==========query loss = {}".format(query_loss))
                     else:
                         if num_step == (self.maml_args.number_of_training_steps_per_iter - 1):
                             query_loss, responses = self.tracker.train_step(query_batch, names_weights_copy,
@@ -364,7 +364,7 @@ class maml_trainer(nn.Module):
                             query_losses.append(query_loss)
                             writer.add_scalar('query_loss',query_loss,it*self.maml_args.num_steps+num_step)
                             print("===query step")
-                            print("==========query loss = {}".format(support_loss))
+                            print("==========query loss = {}".format(query_loss))
                 task_losses = torch.sum(torch.stack(query_losses))
                 total_losses.append(task_losses)
                 if not training_phase:
