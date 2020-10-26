@@ -44,9 +44,20 @@ class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
 
+        # file path and saving initialization
+        self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
+        self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
+        self.save_dir = './checkpoints/maml/'
+        self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
+
+        # inner tracker related initialization
+        self.maml_args = self.parse_maml_args()
+
         self.model = Net(
             backbone=AlexNet(args=self.maml_args),
             head=SiamFC(device=self.device, args=self.maml_args))
+        self.load_pretrain()
+        ops.init_weights(self.model)
 
         # device setting initialization
         self.cuda = torch.cuda.is_available()
@@ -61,19 +72,6 @@ class maml_trainer(nn.Module):
 
             self.device = torch.cuda.current_device()
         self.to(self.device)
-
-        # file path and saving initialization
-        self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
-        self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/maml/'
-        self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
-
-        # inner tracker related initialization
-        self.maml_args = self.parse_maml_args()
-
-
-        self.load_pretrain()
-        ops.init_weights(self.model)
 
         self.tracker = TrackerSiamFC(loss_setting=[0.5, 2.0, 0],
                                      maml_args=self.maml_args)  # add maml_args
