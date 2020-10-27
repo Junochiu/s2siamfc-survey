@@ -38,17 +38,20 @@ random.seed(123456)  # random and transforms
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-
+torch.autograd.set_detect_anomaly(True)
 
 class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
-
+        '''
         if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
         else:
             self.device = torch.device('cpu')
-
+        '''
+        self.device = torch.cuda.current_device()
+        ipdb.set_trace()  
+   
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
@@ -388,20 +391,20 @@ class maml_trainer(nn.Module):
                     self.model.restore_backup_stats()
                 if it % self.maml_args.batches_per_iter == 0:
                     print("===outer_loop_updated")
-                    with torch.autograd.set_detect_anomaly(True):
-                        losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-                        for idx, item in enumerate(per_step_loss_importance_vectors):
-                            losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-                        self.optimizer.zero_grad()
-                        loss = losses['loss']
-                        #loss.backward(retain_graph=True)  # check out the loss here
-                        torch.autograd.set_detect_anomaly(True)
-                        loss.backward(retain_graph=True)  # check out the loss here
-                        self.optimizer.step()
-                        losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
-                        self.optimizer.zero_grad()
-                        self.zero_grad()
-                        self.model.zero_grad()
+                   # with torch.autograd.set_detect_anomaly(True):
+                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+                    for idx, item in enumerate(per_step_loss_importance_vectors):
+                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                    self.optimizer.zero_grad()
+                    loss = losses['loss']
+                    #loss.backward(retain_graph=True)  # check out the loss here
+                    torch.autograd.set_detect_anomaly(True)
+                    loss.backward(retain_graph=True)  # check out the loss here
+                    self.optimizer.step()
+                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
+                    self.optimizer.zero_grad()
+                    self.zero_grad()
+                    self.model.zero_grad()
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
             loss = losses['loss']
