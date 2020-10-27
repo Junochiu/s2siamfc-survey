@@ -397,6 +397,7 @@ class TrackerSiamFC(Tracker):
         self.net = model
         self.net.train(backward)
 
+
         # parse batch data
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
@@ -404,6 +405,7 @@ class TrackerSiamFC(Tracker):
 
         #torchvision.utils.save_image(z, './test_z.png')
         #torchvision.utils.save_image(x, './test_x.png')
+
 
         # inference
         feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
@@ -438,9 +440,47 @@ class TrackerSiamFC(Tracker):
             return [query_set, batch[1], neg], loss_siam, responses
         return loss_siam, responses
 
+    def query_step(self, model, batch, names_weight_copy, phase, num_step, backward=False):
+        def get_labels(responses):
+            # create labels
+            r_b, r_c, r_w, r_h = responses.size()
+            # calculate loss
+
+            labels = []
+            if all(neg):
+                labels = torch.zeros(responses.size()).to(self.device)
+            elif not any(neg):
+                labels = self._create_labels(responses.size())
+            else:
+                for n in neg:
+                    #            print(n)
+                    if n:
+                        labels.append(torch.zeros([1, r_w, r_h]).to(self.device))
+                    else:
+                        labels.append(self._create_label(responses.size()))
+                labels = torch.stack(labels)
+
+            return labels
+
+        self.net = model
+        self.net.eval()
+        z = batch[0].to(self.device, non_blocking=self.cuda)
+        x = batch[1].to(self.device, non_blocking=self.cuda)
+        neg = batch[-1]
+        with torch.no_grad():
+            feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
+            feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
+        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
+        labels = get_labels(responses)
+        loss = self.criterion(responses, labels)
+
+        return loss, responses
+
     def set_train_model(self, model):
         self.net = model
         self.net.to(self.device)
+
+
 
     @torch.enable_grad()
     def train_over(self, seqs, val_seqs=None,

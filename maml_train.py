@@ -43,8 +43,11 @@ torch.backends.cudnn.benchmark = False
 class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
-        
-        self.device = torch.cuda.current_device()
+
+        if torch.cuda.is_available():
+            self.device = torch.cuda.current_device()
+        else:
+            self.device = torch.device('cpu')
 
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
@@ -212,7 +215,10 @@ class maml_trainer(nn.Module):
 
     def load_pretrain(self):
         filepath = os.path.join(".", "pretrain", "eccv_best", "siamfc_alexnet_e50.pth")
-        self.state_dict = torch.load(filepath,map_location="cuda:0")
+        if torch.cuda.is_available():
+            self.state_dict = torch.load(filepath,map_location="cuda:0")
+        else:
+            self.state_dict = torch.load(filepath, map_location="cpu")
         # model weight parsing
         oldkey = []
         self.tmp_model = self.state_dict.copy()
@@ -362,7 +368,7 @@ class maml_trainer(nn.Module):
                     if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
                         names_weights_copy = {key: torch.squeeze(value,0) for key, value in names_weights_copy.items()}
 
-                        query_loss, responses = self.tracker.train_step(self.model, query_batch,
+                        query_loss, responses = self.tracker.query_step(self.model, query_batch,
                                                                         names_weight_copy=names_weights_copy,
                                                                         phase='query', num_step=num_step)
                         writer.add_scalar('query_loss', query_loss, it * self.maml_args.num_steps + num_step)
@@ -371,8 +377,8 @@ class maml_trainer(nn.Module):
                         print("==========query loss = {}".format(query_loss))
                     else:
                         if num_step == (self.maml_args.number_of_training_steps_per_iter - 1):
-                            query_loss, responses = self.tracker.train_step(query_batch, names_weights_copy,
-                                                                            phase='query')
+                            query_loss, responses = self.tracker.query_step(query_batch, names_weights_copy,
+                                                                            phase='query', num_step=num_step)
                             query_losses.append(query_loss)
                             writer.add_scalar('query_loss',query_loss,it*self.maml_args.num_steps+num_step)
                             print("===query step")
