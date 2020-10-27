@@ -43,6 +43,8 @@ torch.backends.cudnn.benchmark = False
 class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
+        
+        self.device = torch.cuda.current_device()
 
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
@@ -55,8 +57,9 @@ class maml_trainer(nn.Module):
 
         self.model = Net(
             backbone=AlexNet(args=self.maml_args),
-            head=SiamFC(device=self.device, args=self.maml_args))
+            head=SiamFC(args=self.maml_args))
         self.load_pretrain()
+        self.model.to(self.device)
         ops.init_weights(self.model)
 
         # device setting initialization
@@ -78,13 +81,20 @@ class maml_trainer(nn.Module):
         print("==========tracker initialized==========")
         self.cfg = self.tracker.cfg
         self.task_learning_rate = self.maml_args.task_learning_rate  # should change into original s2siamfc's learning rate
+        ipdb.set_trace()
         self.inner_loop_optimizer = LSLRGradientDescentLearningRule(device=self.device,
                                                                     init_learning_rate=self.maml_args.task_learning_rate,
                                                                     total_num_inner_loop_steps=self.maml_args.number_of_training_steps_per_iter,
                                                                     use_learnable_learning_rates=self.maml_args.learnable_per_layer_per_step_inner_loop_learning_rate)
         self.inner_loop_optimizer.initialise(
             names_weights_dict=self.get_inner_loop_parameter_dict(params=self.model.named_parameters()))
-
+ 
+        self.to(self.device)
+       
+        print("Inner Loop parameters")
+        for key,value in self.inner_loop_optimizer.named_parameters():
+            print(key,value.shape,value.device)
+       
         # outer loop related initialization
         ''' [settings in maml]
         self.optimizer = optim.Adam(self.trainable_parameters(), lr=self.maml_args.meta_learning_rate, amsgrad=False)
@@ -92,6 +102,12 @@ class maml_trainer(nn.Module):
                                                             eta_min=self.maml_args.min_learning_rate)
         '''
         ''' [settings in original s2siamfc] '''
+        
+        print("Outer Loop Parameters")
+        for name,param in self.named_parameters():
+            if param.requires_grad:
+                print(name,param.shape,param.device,param.requires_grad)
+
         gamma = np.power(
             self.cfg.ultimate_lr / self.cfg.initial_lr,
             1.0 / self.cfg.epoch_num)
@@ -106,7 +122,7 @@ class maml_trainer(nn.Module):
         self.seqs = ImageNetVID(self.root_dir, subset=['train'], neg_dir=self.neg_dir[0])
         self.current_iter = 0
         self.current_epoch = 0
-
+        ipdb.set_trace()
         # tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
 
     def get_per_step_loss_importance_vector(self):
@@ -197,10 +213,7 @@ class maml_trainer(nn.Module):
 
     def load_pretrain(self):
         filepath = os.path.join(".", "pretrain", "eccv_best", "siamfc_alexnet_e50.pth")
-        if torch.cuda.is_available():
-            self.state_dict = torch.load(filepath)
-        else:
-            self.state_dict = torch.load(filepath, map_location='cpu')
+        self.state_dict = torch.load(filepath,map_location="cuda:0")
         # model weight parsing
         oldkey = []
         self.tmp_model = self.state_dict.copy()
