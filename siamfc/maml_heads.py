@@ -32,9 +32,9 @@ class SiamFC(nn.Module):
                 params = {key: value for key, value in params.items()}
                 param = extract_top_level_dict(params)
                 param_head = extract_top_level_dict(param['head'])
-                return self.map_norm.forward(self._fast_xcorr(z, x),num_step,params=param_head['map_norm'])
+                return self.map_norm(self._fast_xcorr(z, x),num_step,params=param_head['map_norm'])
             else:
-                return self.map_norm.forward(self._fast_xcorr(z, x),num_step)
+                return self.map_norm(self._fast_xcorr(z, x),num_step)
         else:
             return self._fast_xcorr(z, x) * self.out_scale
 
