@@ -435,7 +435,7 @@ class MetaConvNormLayerReLU(nn.Module):
                                           backup_running_statistics=backup_running_statistics)
 
         if self.relu:
-            out = F.leaky_relu(out)
+            out = F.relu(out,inplace=False)
 
         return out
 

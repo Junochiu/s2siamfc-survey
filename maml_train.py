@@ -124,7 +124,6 @@ class maml_trainer(nn.Module):
         self.seqs = ImageNetVID(self.root_dir, subset=['train'], neg_dir=self.neg_dir[0])
         self.current_iter = 0
         self.current_epoch = 0
-        ipdb.set_trace()
         # tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
 
     def get_per_step_loss_importance_vector(self):
@@ -389,16 +388,19 @@ class maml_trainer(nn.Module):
                     self.model.restore_backup_stats()
                 if it % self.maml_args.batches_per_iter == 0:
                     print("===outer_loop_updated")
-                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-                    for idx, item in enumerate(per_step_loss_importance_vectors):
-                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-                    self.optimizer.zero_grad()
-                    loss = losses['loss']
-                    loss.backward(retain_graph=True)  # check out the loss here
-                    self.optimizer.step()
-                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
-                    self.optimizer.zero_grad()
-                    self.zero_grad()
+                    with torch.autograd.set_detect_anomaly(True):
+                        losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+                        for idx, item in enumerate(per_step_loss_importance_vectors):
+                            losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                        self.optimizer.zero_grad()
+                        loss = losses['loss']
+                        #loss.backward(retain_graph=True)  # check out the loss here
+                        torch.autograd.set_detect_anomaly(True)
+                        loss.backward(retain_graph=True)  # check out the loss here
+                        self.optimizer.step()
+                        losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
+                        self.optimizer.zero_grad()
+                        self.zero_grad()
 
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
