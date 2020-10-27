@@ -79,7 +79,7 @@ class maml_trainer(nn.Module):
             self.device = torch.cuda.current_device()
         self.to(self.device)
 
-        self.tracker = TrackerSiamFC(loss_setting=[0.5, 2.0, 0],
+        self.tracker = TrackerSiamFC(model=self.model,loss_setting=[0.5, 2.0, 0],
                                      maml_args=self.maml_args)  # add maml_args
         print("==========tracker initialized==========")
         self.cfg = self.tracker.cfg
@@ -353,7 +353,7 @@ class maml_trainer(nn.Module):
                 num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
                 for num_step in range(self.maml_args.num_steps):
                     print("current step = {}".format(num_step))
-                    query_batch, support_loss, responses = self.tracker.train_step(self.model, batch,
+                    query_batch, support_loss, responses = self.tracker.train_step(batch,
                                                                                    names_weights_copy, phase='support',
                                                                                    num_step=num_step)  # extract query dataset from here
                     writer.add_scalar('support_loss', support_loss, it * self.maml_args.num_steps + num_step)
@@ -367,7 +367,7 @@ class maml_trainer(nn.Module):
                     if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
                         names_weights_copy = {key: torch.squeeze(value,0) for key, value in names_weights_copy.items()}
 
-                        query_loss, responses = self.tracker.query_step(self.model, query_batch,
+                        query_loss, responses = self.tracker.query_step(query_batch,
                                                                         names_weight_copy=names_weights_copy,
                                                                         phase='query', num_step=num_step)
                         writer.add_scalar('query_loss', query_loss, it * self.maml_args.num_steps + num_step)
@@ -401,7 +401,7 @@ class maml_trainer(nn.Module):
                         losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                         self.optimizer.zero_grad()
                         self.zero_grad()
-
+                        self.model.zero_grad()
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
             loss = losses['loss']

@@ -78,7 +78,7 @@ class Net(nn.Module):
 
 class TrackerSiamFC(Tracker):
 
-    def __init__(self, maml_args, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0], **kwargs):
+    def __init__(self, model,maml_args, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0], **kwargs):
         super(TrackerSiamFC, self).__init__(name, True)
         self.cfg = self.parse_args(**kwargs)
 
@@ -91,7 +91,7 @@ class TrackerSiamFC(Tracker):
         self.criterion = AC_BalancedLoss(pos_thres=loss_setting[0], alpha=loss_setting[1], margin=loss_setting[2])
         #        self.rank_loss = RankLoss()
         #        self.criterion = BalancedLoss()
-
+        self.net = model
     def parse_args(self, **kwargs):
         # default parameters
         cfg = {
@@ -296,7 +296,7 @@ class TrackerSiamFC(Tracker):
 
         return boxes, times
 
-    def train_step(self, model, batch, names_weight_copy, phase, num_step, backward=True):
+    def train_step(self, batch, names_weight_copy, phase, num_step, backward=True):
         def get_labels(responses):
             # create labels
             r_b, r_c, r_w, r_h = responses.size()
@@ -393,8 +393,6 @@ class TrackerSiamFC(Tracker):
             # set network mode
 
 
-        # try if we can comment these two lines
-        self.net = model
         self.net.train(backward)
 
 
@@ -428,19 +426,19 @@ class TrackerSiamFC(Tracker):
         #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
         #torchvision.utils.save_image(z_masked_2, './test_z_masked_2.png')
 
-        responses_masked_1 = self.net(z_masked_1, x, num_step=num_step, params=names_weight_copy)
-        responses_masked_2 = self.net(z_masked_2, x, num_step=num_step, params=names_weight_copy)
+        responses_masked_1 = self.net.forward(z_masked_1, x, num_step=num_step, params=names_weight_copy)
+        responses_masked_2 = self.net.forward(z_masked_2, x, num_step=num_step, params=names_weight_copy)
 
-        raw_loss = self.criterion(responses, labels)
-        masked_1_loss = self.criterion(responses_masked_1, labels)
-        masked_2_loss = self.criterion(responses_masked_2, labels)
+        raw_loss = self.criterion.forward(responses, labels)
+        masked_1_loss = self.criterion.forward(responses_masked_1, labels)
+        masked_2_loss = self.criterion.forward(responses_masked_2, labels)
 
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked * masked_2_loss
         if phase == 'support':
             return [query_set, batch[1], neg], loss_siam, responses
         return loss_siam, responses
 
-    def query_step(self, model, batch, names_weight_copy, phase, num_step, backward=False):
+    def query_step(self,batch, names_weight_copy, phase, num_step, backward=False):
         def get_labels(responses):
             # create labels
             r_b, r_c, r_w, r_h = responses.size()
@@ -462,7 +460,6 @@ class TrackerSiamFC(Tracker):
 
             return labels
 
-        self.net = model
         self.net.eval()
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
@@ -475,11 +472,6 @@ class TrackerSiamFC(Tracker):
         loss = self.criterion(responses, labels)
 
         return loss, responses
-
-    def set_train_model(self, model):
-        self.net = model
-        self.net.to(self.device)
-
 
 
     @torch.enable_grad()
