@@ -257,7 +257,7 @@ class maml_trainer(nn.Module):
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
-            'batches_per_iter':10
+            'batches_per_iter':2
         }
 
         for key, val in kwargs.items():
@@ -388,17 +388,19 @@ class maml_trainer(nn.Module):
                     self.model.restore_backup_stats()
                 if it % self.maml_args.batches_per_iter == 0:
                     print("===outer_loop_updated")
-                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-                    for idx, item in enumerate(per_step_loss_importance_vectors):
-                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-                    self.optimizer.zero_grad()
-                    loss = losses['loss']
-                    loss.backward()  # check out the loss here
-                    torch.autograd.set_detect_anomaly(True)
-                    self.optimizer.step()
-                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
-                    self.optimizer.zero_grad()
-                    self.zero_grad()
+                    with torch.autograd.set_detect_anomaly(True):
+                        losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+                        for idx, item in enumerate(per_step_loss_importance_vectors):
+                            losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                        self.optimizer.zero_grad()
+                        loss = losses['loss']
+                        #loss.backward(retain_graph=True)  # check out the loss here
+                        torch.autograd.set_detect_anomaly(True)
+                        loss.backward(retain_graph=True)  # check out the loss here
+                        self.optimizer.step()
+                        losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
+                        self.optimizer.zero_grad()
+                        self.zero_grad()
 
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
