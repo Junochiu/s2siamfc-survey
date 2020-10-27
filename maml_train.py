@@ -81,7 +81,6 @@ class maml_trainer(nn.Module):
         print("==========tracker initialized==========")
         self.cfg = self.tracker.cfg
         self.task_learning_rate = self.maml_args.task_learning_rate  # should change into original s2siamfc's learning rate
-        ipdb.set_trace()
         self.inner_loop_optimizer = LSLRGradientDescentLearningRule(device=self.device,
                                                                     init_learning_rate=self.maml_args.task_learning_rate,
                                                                     total_num_inner_loop_steps=self.maml_args.number_of_training_steps_per_iter,
@@ -253,7 +252,7 @@ class maml_trainer(nn.Module):
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
-            'batches_per_iter':20
+            'batches_per_iter':10
         }
 
         for key, val in kwargs.items():
