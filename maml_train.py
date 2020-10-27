@@ -252,7 +252,7 @@ class maml_trainer(nn.Module):
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
-            'batches_per_iter':10
+            'batches_per_iter':2
         }
 
         for key, val in kwargs.items():
@@ -388,7 +388,7 @@ class maml_trainer(nn.Module):
                         losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
                     self.optimizer.zero_grad()
                     loss = losses['loss']
-                    loss.backward()  # check out the loss here
+                    loss.backward(retain_graph=True)  # check out the loss here
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     self.optimizer.zero_grad()
