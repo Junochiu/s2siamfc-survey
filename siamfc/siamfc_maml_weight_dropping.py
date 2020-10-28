@@ -406,8 +406,8 @@ class TrackerSiamFC(Tracker):
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
 
-        torchvision.utils.save_image(z, './test_z.png')
-        torchvision.utils.save_image(x, './test_x.png')
+        #torchvision.utils.save_image(z, './test_z.png')
+        #torchvision.utils.save_image(x, './test_x.png')
 
         param_dict = dict()
         params = {key: value[0] for key, value in names_weight_copy.items()}
@@ -429,8 +429,8 @@ class TrackerSiamFC(Tracker):
         z_masked_2 = get_adv_mask_img(z, feat_z, grad_z)
         if phase == 'support':
             query_set = get_adv_mask_img(z, feat_z, grad_z)
-            torchvision.utils.save_image(query_set, './query_set.png')
-        ipdb.set_trace()
+            #torchvision.utils.save_image(query_set, './query_set.png')
+        #ipdb.set_trace()
 
         # torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
         #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
