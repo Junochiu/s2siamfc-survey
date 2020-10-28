@@ -117,7 +117,7 @@ class maml_trainer(nn.Module):
             self.cfg.ultimate_lr / self.cfg.initial_lr,
             1.0 / self.cfg.epoch_num)
         self.optimizer = optim.SGD(
-            self.model.parameters(),
+            self.trainable_parameters(),
             lr=self.cfg.initial_lr,
             weight_decay=self.cfg.weight_decay,
             momentum=self.cfg.momentum)
@@ -128,6 +128,14 @@ class maml_trainer(nn.Module):
         self.current_iter = 0
         self.current_epoch = 0
         # tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
+
+    def trainable_parameters(self):
+        """
+        Returns an iterator over the trainable parameters of the model.
+        """
+        for param in self.parameters():
+            if param.requires_grad:
+                yield param
 
     def get_per_step_loss_importance_vector(self):
         """
