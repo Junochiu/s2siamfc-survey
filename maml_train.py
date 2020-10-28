@@ -43,14 +43,14 @@ torch.autograd.set_detect_anomaly(True)
 class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
-        '''
+
         if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
         else:
             self.device = torch.device('cpu')
-        '''
-        self.device = torch.cuda.current_device()
-        ipdb.set_trace()  
+
+        #self.device = torch.cuda.current_device()
+        #ipdb.set_trace()
    
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
@@ -223,21 +223,22 @@ class maml_trainer(nn.Module):
             self.state_dict = torch.load(filepath, map_location="cpu")
         # model weight parsing
         oldkey = []
-        self.tmp_model = self.state_dict.copy()
-        for key in self.tmp_model.keys():
-            key_split = key.split(".")
-            if key_split[0] != 'head':
-                if key_split[2] == '0':
-                    key_split[2] = "conv"
-                elif key_split[2] == '1':
-                    key_split[2] = "norm_layer"
-                str = "."
-                new_key = str.join(key_split)
-                self.state_dict[new_key] = self.tmp_model[key]
-                oldkey.append(key)
-        for key in oldkey:
-            del self.state_dict[key]
-        self.model.load_state_dict(self.state_dict, strict=False)
+        with torch.no_grad():
+            self.tmp_model = self.state_dict.copy()
+            for key in self.tmp_model.keys():
+                key_split = key.split(".")
+                if key_split[0] != 'head':
+                    if key_split[2] == '0':
+                        key_split[2] = "conv"
+                    elif key_split[2] == '1':
+                        key_split[2] = "norm_layer"
+                    str = "."
+                    new_key = str.join(key_split)
+                    self.state_dict[new_key]=self.tmp_model[key]
+                    oldkey.append(key)
+            for key in oldkey:
+                del self.state_dict[key]
+            self.model.load_state_dict(self.state_dict, strict=False)
 
     def parse_maml_args(self, **kwargs):
         # default parameters
@@ -353,7 +354,15 @@ class maml_trainer(nn.Module):
                 data_time = time.time() - end
                 per_step_loss_importance_vectors = self.get_per_step_loss_importance_vector()
                 names_weights_copy = self.get_inner_loop_parameter_dict(self.model.named_parameters())
+                ipdb.set_trace()
                 num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
+
+                names_weights_copy = {
+                    name.replace('module.', ''): value.unsqueeze(0).repeat(
+                        [num_devices] + [1 for i in range(len(value.shape))]) for
+                    name, value in names_weights_copy.items()}
+
+
                 for num_step in range(self.maml_args.num_steps):
                     print("current step = {}".format(num_step))
                     query_batch, support_loss, responses = self.tracker.train_step(batch,

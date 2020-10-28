@@ -25,6 +25,7 @@ from .maml_heads import SiamFC, SiamFC_1x1_DW
 from .losses import AC_BalancedLoss, BalancedLoss, RankLoss
 from .datasets import Pair
 from .transforms import SiamFCTransforms
+from .maml_basicstructure import extract_top_level_dict
 from utils.lr_helper import build_lr_scheduler
 from utils.img_loader import cv2_RGB_loader
 from got10k.trackers import Tracker
@@ -50,14 +51,18 @@ class Net(nn.Module):
         self.back_z = backward_hook_z
 
     def forward(self, z, x, params=None, num_step=0):
+        param_dict = dict()
         if params is None:
             z = self.backbone(z)
             x = self.backbone(x)
             return self.head(z, x)
         else:
-            z = self.backbone(z, params=params, num_step=num_step)
-            x = self.backbone(x, params=params, num_step=num_step)
-            return self.head(z, x, params=params, num_step=num_step)
+            params = {key:value[0] for key,value in params.items()}
+            param_dict = extract_top_level_dict(current_dict=params)
+
+            z = self.backbone(z, params=param_dict['backbone'], num_step=num_step)
+            x = self.backbone(x, params=param_dict['backbone'], num_step=num_step)
+            return self.head(z, x, params=param_dict['head'], num_step=num_step)
 
     def zero_grad(self, params=None):
         if params is None:
@@ -393,7 +398,7 @@ class TrackerSiamFC(Tracker):
             # set network mode
 
 
-        self.net.train(backward)
+        #self.net.train(backward)
 
 
         # parse batch data
@@ -401,17 +406,20 @@ class TrackerSiamFC(Tracker):
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
 
-        #torchvision.utils.save_image(z, './test_z.png')
-        #torchvision.utils.save_image(x, './test_x.png')
+        torchvision.utils.save_image(z, './test_z.png')
+        torchvision.utils.save_image(x, './test_x.png')
 
+        param_dict = dict()
+        params = {key: value[0] for key, value in names_weight_copy.items()}
+        param_dict = extract_top_level_dict(current_dict=params)
 
         # inference
-        feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
-        feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
+        feat_z = self.net.backbone(z, num_step=num_step, params=param_dict['backbone'])
+        feat_x = self.net.backbone(x, num_step=num_step, params=param_dict['backbone'])
 
         feat_z.register_hook(self.net.back_z)
 
-        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
+        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=param_dict['head'])
 
         labels = get_labels(responses)
 
@@ -421,10 +429,14 @@ class TrackerSiamFC(Tracker):
         z_masked_2 = get_adv_mask_img(z, feat_z, grad_z)
         if phase == 'support':
             query_set = get_adv_mask_img(z, feat_z, grad_z)
+            torchvision.utils.save_image(query_set, './query_set.png')
+        ipdb.set_trace()
 
         # torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
         #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
         #torchvision.utils.save_image(z_masked_2, './test_z_masked_2.png')
+
+
 
         responses_masked_1 = self.net.forward(z_masked_1, x, num_step=num_step, params=names_weight_copy)
         responses_masked_2 = self.net.forward(z_masked_2, x, num_step=num_step, params=names_weight_copy)
@@ -465,9 +477,10 @@ class TrackerSiamFC(Tracker):
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
         with torch.no_grad():
-            feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
-            feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
-        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
+            #feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
+            #feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
+            #responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
+            responses = self.net.forward(z,x,params=names_weight_copy)
         labels = get_labels(responses)
         loss = self.criterion(responses, labels)
 
