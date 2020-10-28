@@ -50,7 +50,6 @@ class maml_trainer(nn.Module):
             self.device = torch.device('cpu')
         '''
         self.device = torch.cuda.current_device()
-        ipdb.set_trace()  
    
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
@@ -394,7 +393,7 @@ class maml_trainer(nn.Module):
                    # with torch.autograd.set_detect_anomaly(True):
                     losses = self.get_across_task_loss_metrics(total_losses=total_losses)
                     for idx, item in enumerate(per_step_loss_importance_vectors):
-                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                        losses['loss_importance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
                     self.optimizer.zero_grad()
                     loss = losses['loss']
                     #loss.backward(retain_graph=True)  # check out the loss here
