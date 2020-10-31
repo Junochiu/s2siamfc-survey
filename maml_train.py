@@ -135,6 +135,7 @@ class maml_trainer(nn.Module):
         """
         for param in self.parameters():
             if param.requires_grad:
+                print(param)
                 yield param
 
     def get_per_step_loss_importance_vector(self):
@@ -175,6 +176,12 @@ class maml_trainer(nn.Module):
                     if "norm_layer" not in name:
                         param_dict[name] = param.to(device=self.device)
         return param_dict
+
+    def print_outer_loop_param(self):
+        print("Outer Loop Parameters")
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                print(name, param.shape, param.device, param.requires_grad)
 
     def apply_inner_loop_update(self, loss, names_weights_copy, use_second_order, current_step_idx):
         """
@@ -355,6 +362,9 @@ class maml_trainer(nn.Module):
         total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
             self.model.zero_grad()
+
+            # print out the trainable parameter to check require_grad
+            self.print_outer_loop_param()
             for it, batch in enumerate(dataloader):
                 print("------------------------------------------------------")
                 print("current it = {}".format(it))
@@ -362,7 +372,6 @@ class maml_trainer(nn.Module):
                 data_time = time.time() - end
                 per_step_loss_importance_vectors = self.get_per_step_loss_importance_vector()
                 names_weights_copy = self.get_inner_loop_parameter_dict(self.model.named_parameters())
-                ipdb.set_trace()
                 num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
                 names_weights_copy = {
