@@ -424,7 +424,7 @@ class maml_trainer(nn.Module):
                     loss = losses['loss']
                     #loss.backward(retain_graph=True)  # check out the loss here
                     torch.autograd.set_detect_anomaly(True)
-                    ipdb.set_trace()
+                    #ipdb.set_trace()
                     loss.backward(retain_graph=True)  # check out the loss here
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
