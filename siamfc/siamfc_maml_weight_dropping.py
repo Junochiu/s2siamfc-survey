@@ -476,11 +476,7 @@ class TrackerSiamFC(Tracker):
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
-        with torch.no_grad():
-            #feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
-            #feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
-            #responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
-            responses = self.net.forward(z,x,params=names_weight_copy)
+        responses = self.net.forward(z,x,params=names_weight_copy)
         labels = get_labels(responses)
         loss = self.criterion(responses, labels)
 
