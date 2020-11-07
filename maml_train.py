@@ -135,7 +135,6 @@ class maml_trainer(nn.Module):
         """
         for param in self.parameters():
             if param.requires_grad:
-                print(param)
                 yield param
 
     def get_per_step_loss_importance_vector(self):
@@ -362,7 +361,7 @@ class maml_trainer(nn.Module):
         total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
             self.model.zero_grad()
-
+            self.model.train()
             # print out the trainable parameter to check require_grad
             self.print_outer_loop_param()
             for it, batch in enumerate(dataloader):
@@ -425,6 +424,7 @@ class maml_trainer(nn.Module):
                     loss = losses['loss']
                     #loss.backward(retain_graph=True)  # check out the loss here
                     torch.autograd.set_detect_anomaly(True)
+                    ipdb.set_trace()
                     loss.backward(retain_graph=True)  # check out the loss here
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
