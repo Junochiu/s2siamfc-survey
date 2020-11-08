@@ -357,14 +357,13 @@ class maml_trainer(nn.Module):
 
         #self.get_training_batches(seqs,supervised)
         end = time.time()
-        total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
             self.model.train()
             self.model.zero_grad()
             self.optimizer.zero_grad()
             self.inner_loop_optimizer.zero_grad()
             self.zero_grad()
-
+            total_losses = []
             # print out the trainable parameter to check require_grad
             self.print_outer_loop_param()
             for it, batch in enumerate(dataloader):
@@ -430,6 +429,7 @@ class maml_trainer(nn.Module):
                     loss.backward()  # check out the loss here
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
+                    total_losses = []
 
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
