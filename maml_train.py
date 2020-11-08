@@ -223,7 +223,6 @@ class maml_trainer(nn.Module):
 
     def get_across_task_loss_metrics(self, total_losses):
         losses = dict()
-
         losses['loss'] = torch.mean(torch.stack(total_losses))
 
 
@@ -360,8 +359,12 @@ class maml_trainer(nn.Module):
         end = time.time()
         total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
-            self.model.zero_grad()
             self.model.train()
+            self.model.zero_grad()
+            self.optimizer.zero_grad()
+            self.inner_loop_optimizer.zero_grad()
+            self.zero_grad()
+
             # print out the trainable parameter to check require_grad
             self.print_outer_loop_param()
             for it, batch in enumerate(dataloader):
@@ -416,21 +419,18 @@ class maml_trainer(nn.Module):
                     self.model.restore_backup_stats()
                 if it % self.maml_args.batches_per_iter == 0:
                     print("===outer_loop_updated")
-                   # with torch.autograd.set_detect_anomaly(True):
-                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-                    for idx, item in enumerate(per_step_loss_importance_vectors):
-                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-                    self.optimizer.zero_grad()
-                    loss = losses['loss']
-                    #loss.backward(retain_graph=True)  # check out the loss here
-                    torch.autograd.set_detect_anomaly(True)
-                    #ipdb.set_trace()
-                    loss.backward(retain_graph=True)  # check out the loss here
-                    self.optimizer.step()
-                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     self.optimizer.zero_grad()
                     self.zero_grad()
                     self.model.zero_grad()
+                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+                    for idx, item in enumerate(per_step_loss_importance_vectors):
+                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                    loss = losses['loss']
+                    torch.autograd.set_detect_anomaly(True)
+                    loss.backward()  # check out the loss here
+                    self.optimizer.step()
+                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
+
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
             loss = losses['loss']
