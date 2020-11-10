@@ -430,7 +430,13 @@ class maml_trainer(nn.Module):
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     total_losses = []
+            print("=== epoch{} model saved ===".format(self.current_epoch))
+            self.current_epoch = self.current_epoch + 1
+            writer.add_scalar('epoch_loss', loss, self.current_epoch)
+            self.save_model(os.path.join(self.save_dir, "epoch{}.pth".format(self.current_epoch)),
+                            self.model.state_dict)
 
+            '''
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
             loss = losses['loss']
@@ -440,12 +446,7 @@ class maml_trainer(nn.Module):
                 self.current_epoch = self.current_epoch + 1
                 writer.add_scalar('epoch_loss', loss, self.current_epoch)
                 self.save_model(os.path.join(self.save_dir,"epoch{}.pth".format(self.current_epoch)),self.model.state_dict)
-            '''
-            losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-            for idx, item in enumerate(per_step_loss_importance_vectors):
-                losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-            '''
-            #self.meta_update(loss=losses['loss'])
+           '''
 
 
 
