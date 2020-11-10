@@ -436,6 +436,7 @@ class maml_trainer(nn.Module):
             loss = losses['loss']
             writer.add_scalar('iter_loss', loss, self.current_iter)
             if self.current_iter % self.maml_args.total_iter_per_epoch == 0:
+                print("=== epoch{} model saved ===".format(self.current_epoch))
                 self.current_epoch = self.current_epoch + 1
                 writer.add_scalar('epoch_loss', loss, self.current_epoch)
                 self.save_model(os.path.join(self.save_dir,"epoch{}.pth".format(self.current_epoch)),self.model.state_dict)
