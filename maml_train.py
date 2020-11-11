@@ -290,7 +290,7 @@ class maml_trainer(nn.Module):
         :param state: The state containing the experiment state and the network. It's in the form of a dictionary
         object.
         """
-        state['network'] = self.state_dict()
+        #state['network'] = self.state_dict()
         torch.save(state, f=model_save_dir)
 
     def get_training_batches(self,seqs,supervised):
