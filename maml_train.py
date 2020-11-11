@@ -121,6 +121,7 @@ class maml_trainer(nn.Module):
             lr=self.cfg.initial_lr,
             weight_decay=self.cfg.weight_decay,
             momentum=self.cfg.momentum)
+
         self.lr_scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma)
 
         # training related initialization
@@ -310,14 +311,6 @@ class maml_trainer(nn.Module):
             pin_memory=self.cuda,
             drop_last=True)
 
-        self.train_dataloader = DataLoader(
-            self.dataloader,
-            batch_size=self.maml_args.batches_per_iter,
-            shuffle=True,
-            num_workers=0,
-            pin_memory=self.cuda,
-            drop_last=True)
-
     @torch.enable_grad()
     def maml_train(self, seqs, val_seqs=None,
                    save_dir='pretrained', supervised='supervised'):
@@ -430,12 +423,14 @@ class maml_trainer(nn.Module):
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     total_losses = []
+                print("model_saved")
+                self.save_model(os.path.join(self.save_dir, "epoch{}.pth".format(self.current_epoch)),
+                                self.model.state_dict())
             print("=== epoch{} model saved ===".format(self.current_epoch))
-            self.current_epoch = self.current_epoch + 1
             writer.add_scalar('epoch_loss', loss, self.current_epoch)
             self.save_model(os.path.join(self.save_dir, "epoch{}.pth".format(self.current_epoch)),
-                            self.model.state_dict)
-
+                            self.model.state_dict())
+            self.current_epoch = self.current_epoch + 1
             '''
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
