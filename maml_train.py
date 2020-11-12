@@ -423,9 +423,6 @@ class maml_trainer(nn.Module):
                     self.optimizer.step()
                     losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     total_losses = []
-                print("model_saved")
-                self.save_model(os.path.join(self.save_dir, "epoch{}.pth".format(self.current_epoch)),
-                                self.model.state_dict())
             print("=== epoch{} model saved ===".format(self.current_epoch))
             writer.add_scalar('epoch_loss', loss, self.current_epoch)
             self.save_model(os.path.join(self.save_dir, "epoch{}.pth".format(self.current_epoch)),
