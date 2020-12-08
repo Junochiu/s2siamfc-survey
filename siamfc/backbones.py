@@ -91,11 +91,11 @@ class AlexNet(nn.Module):
         super(AlexNet, self).__init__()
         self.conv1 = conv_bn_relu(3, 96, stride=2, kszie=11, pad=0)
         self.pool1 = nn.MaxPool2d(3, 2, 0, ceil_mode=True)
-        self.conv2 = conv_bn_relu(96, 256, 1, 5, 0)
+        self.conv2 = conv_bn_relu(96, 256, 1, 5, 0,groups=2)
         self.pool2 = nn.MaxPool2d(3, 2, 0, ceil_mode=True)
         self.conv3 = conv_bn_relu(256, 384, 1, 3, 0)
-        self.conv4 = conv_bn_relu(384, 384, 1, 3, 0)
-        self.conv5 = conv_bn_relu(384, 256, 1, 3, 0, has_relu=False)
+        self.conv4 = conv_bn_relu(384, 384, 1, 3, 0,groups=2)
+        self.conv5 = conv_bn_relu(384, 256, 1, 3, 0, has_relu=False,groups=2,has_bn=False)
 
     def forward(self, x):
         x = self.conv1(x)

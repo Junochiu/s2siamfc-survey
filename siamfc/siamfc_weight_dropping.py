@@ -71,8 +71,23 @@ class TrackerSiamFC(Tracker):
         
         # load checkpoint if provided
         if net_path is not None:
-            self.net.load_state_dict(torch.load(
-                net_path, map_location=lambda storage, loc: storage))
+            state_dict = torch.load(net_path, map_location=lambda storage, loc: storage)
+            tmp_model = state_dict.copy()
+            oldkey = []
+            for key in tmp_model.keys():
+                key_split = key.split(".")
+                if key_split[0] != 'head':
+                    if key_split[2] == '0':
+                        key_split[2] = "conv"
+                    elif key_split[2] == '1':
+                        key_split[2] = "bn"
+                    str = "."
+                    new_key = str.join(key_split)
+                    state_dict[new_key]=tmp_model[key]
+                    oldkey.append(key)
+            for key in oldkey:
+                del state_dict[key]
+            self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
 
         # setup criterion

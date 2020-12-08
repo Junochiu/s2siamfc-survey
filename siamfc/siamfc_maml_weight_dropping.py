@@ -82,8 +82,7 @@ class Net(nn.Module):
                             params[name].grad = None
 
 class TrackerSiamFC(Tracker):
-
-    def __init__(self, model,maml_args, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0], **kwargs):
+    def __init__(self, model,maml_args=None, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0], **kwargs):
         super(TrackerSiamFC, self).__init__(name, True)
         self.cfg = self.parse_args(**kwargs)
 
@@ -193,6 +192,10 @@ class TrackerSiamFC(Tracker):
         # =============================================================================
         #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
         # =============================================================================
+
+
+
+
 
         self.kernel = self.net.backbone(z)
 

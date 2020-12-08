@@ -352,7 +352,7 @@ class ExperimentVOT(object):
 
                 # read results of all repetitions
                 record_files = sorted(glob.glob(os.path.join(
-                    self.result_dir, name, 'baseline', seq_name,
+                    self.result_dir, name, 'unsupervised', seq_name,
                     '%s_[0-9]*.txt' % seq_name)))
                 boxes = [read_record(f) for f in record_files]
                 assert all([len(b) == len(anno) for b in boxes])
