@@ -72,6 +72,7 @@ class TrackerSiamFC(Tracker):
         # load checkpoint if provided
         if net_path is not None:
             state_dict = torch.load(net_path, map_location=lambda storage, loc: storage)
+            '''
             tmp_model = state_dict.copy()
             oldkey = []
             for key in tmp_model.keys():
@@ -85,6 +86,20 @@ class TrackerSiamFC(Tracker):
                     new_key = str.join(key_split)
                     state_dict[new_key]=tmp_model[key]
                     oldkey.append(key)
+            for key in oldkey:
+                del state_dict[key]
+            '''
+            tmp_model = state_dict.copy()
+            oldkey = []
+            for key in tmp_model.keys():
+                key_split = key.split(".")
+                if key_split[0] != 'head':
+                    if key_split[2] == 'norm_layer':
+                        key_split[2] = "bn"
+                        str = "."
+                        new_key = str.join(key_split)
+                        state_dict[new_key] = tmp_model[key]
+                        oldkey.append(key)
             for key in oldkey:
                 del state_dict[key]
             self.net.load_state_dict(state_dict)
@@ -209,6 +224,114 @@ class TrackerSiamFC(Tracker):
 # =============================================================================
         
         self.kernel = self.net.backbone(z)
+
+    def maml_init(self, img, box):
+        # convert box to 0-indexed and center based [y, x, h, w]
+        box = np.array([
+            box[1] - 1 + (box[3] - 1) / 2,
+            box[0] - 1 + (box[2] - 1) / 2,
+            box[3], box[2]], dtype=np.float32)
+        self.center, self.target_sz = box[:2], box[2:]
+
+        # create hanning window
+        self.upscale_sz = self.cfg.response_up * self.cfg.response_sz
+        self.hann_window = np.outer(
+            np.hanning(self.upscale_sz),
+            np.hanning(self.upscale_sz))
+        self.hann_window /= self.hann_window.sum()
+
+        # search scale factors
+        self.scale_factors = self.cfg.scale_step ** np.linspace(
+            -(self.cfg.scale_num // 2),
+            self.cfg.scale_num // 2, self.cfg.scale_num)
+
+        # exemplar and search sizes
+        context = self.cfg.context * np.sum(self.target_sz)
+        self.z_sz = np.sqrt(np.prod(self.target_sz + context))
+        self.x_sz = self.z_sz * \
+                    self.cfg.instance_sz / self.cfg.exemplar_sz
+
+        # loader img if path is given
+        if isinstance(img, string_types):
+            #            img = cv2_RGB_loader(img)
+            img = Image.open(img)
+
+        # =============================================================================
+        #         self.norm_trans = torchvision.transforms.Compose([
+        #         torchvision.transforms.ToPILImage(),
+        #         torchvision.transforms.ToTensor()])
+        # =============================================================================
+
+        # exemplar image
+        self.avg_color = np.mean(img, axis=(0, 1))
+        z = ops.crop_and_resize(
+            img, self.center, self.z_sz,
+            out_size=self.cfg.exemplar_sz,
+            border_value=self.avg_color)  # return cv2
+
+        z = cv2.normalize(z, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        # exemplar features
+        z = torch.from_numpy(z).to(
+            self.device).permute(2, 0, 1).unsqueeze(0).float()
+
+        # search images
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz * f,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color) for f in self.scale_factors]
+        x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
+        x = np.stack(x, axis=0)
+        x = torch.from_numpy(x).to(
+            self.device).permute(0, 3, 1, 2).float()
+
+
+        transforms = SiamFCTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        '''
+        dataset = Pair(
+            seqs="not important",
+            transforms=transforms, supervised="self-supervised", img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+        '''
+
+        inference_update = 3
+        for idx in range(inference_update):
+            #ipdb.set_trace()
+            #x_prown,z_prown = self.get_random_pair(img,transforms)
+            loss,_ = self.train_step([z,x,[0]])
+            self.optimizer.zero_grad()
+            loss.backward()
+            print("loss update in init = {}".format(loss))
+            self.optimizer.step()
+        # =============================================================================
+        #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
+        # =============================================================================
+        # set to evaluation mode
+        self.net.eval()
+        self.kernel = self.net.backbone(z)
+
+    def get_random_pair(self, img, transforms):
+
+        #z = cv2_RGB_loader(img)  # get RGB img
+        z = img
+        img_h, img_w, = self.z_sz, self.z_sz
+
+        target_sz = [img_w // np.random.randint(4, 9), img_h // np.random.randint(4, 9)]
+        target_pos = [np.random.randint(target_sz[0], (img_w - target_sz[0])),
+                      np.random.randint(target_sz[1], (img_h - target_sz[1]))]
+
+        box = self._cxy_wh_2_bbox(target_pos, target_sz)
+
+        item = (z, z, box, box)
+        if transforms is not None:
+            item = transforms(*item)
+        ipdb.set_trace()
+        return item
+
+    def _cxy_wh_2_bbox(self, cxy, wh):
+        return np.array([cxy[0] - wh[0] / 2, cxy[1] - wh[1] / 2, cxy[0] + wh[0] / 2, cxy[1] + wh[1] / 2])
 
     @torch.no_grad()
     def update(self, img):
@@ -417,7 +540,7 @@ class TrackerSiamFC(Tracker):
         self.net.train(backward)
 
 
-        ipdb.set_trace()
+        #ipdb.set_trace()
         # parse batch data
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)

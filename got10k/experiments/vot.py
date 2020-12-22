@@ -46,7 +46,7 @@ class ExperimentVOT(object):
         super(ExperimentVOT, self).__init__()
         if isinstance(experiments, str):
             experiments = (experiments,)
-        assert all([e in ['supervised', 'unsupervised', 'realtime']
+        assert all([e in ['supervised', 'unsupervised', 'realtime','maml']
                     for e in experiments])
         self.dataset = VOT(
             root_dir, version, anno_type='default',
@@ -76,6 +76,8 @@ class ExperimentVOT(object):
             self.run_unsupervised(tracker, visualize)
         if 'realtime' in self.experiments:
             self.run_realtime(tracker, visualize)
+        if 'maml' in self.experiments:
+            self.run_maml(tracker, visualize)
 
     def run_supervised(self, tracker, visualize=False):
         print('Running supervised experiment...')
@@ -160,6 +162,93 @@ class ExperimentVOT(object):
                         else:
                             show_frame(image)
                 
+                # record results
+                self._record(record_file, boxes, times)
+
+    def run_maml(self, tracker, visualize=False):
+        print('Running maml experiment...')
+
+        # loop over the complete dataset
+        for s, (img_files, anno, _) in enumerate(self.dataset):
+            seq_name = self.dataset.seq_names[s]
+            print('--Sequence %d/%d: %s' % (s + 1, len(self.dataset), seq_name))
+
+            # rectangular bounding boxes
+            anno_rects = anno.copy()
+            if anno_rects.shape[1] == 8:
+                anno_rects = self.dataset._corner2rect(anno_rects)
+
+            # run multiple repetitions for each sequence
+            for r in range(self.repetitions):
+                # check if the tracker is deterministic
+                if r > 0 and tracker.is_deterministic:
+                    break
+                elif r == 3 and self._check_deterministic('baseline', tracker.name, seq_name):
+                    print('  Detected a deterministic tracker, ' +
+                          'skipping remaining trials.')
+                    break
+                print(' Repetition: %d' % (r + 1))
+
+                # skip if results exist
+                record_file = os.path.join(
+                    self.result_dir, tracker.name, 'baseline', seq_name,
+                    '%s_%03d.txt' % (seq_name, r + 1))
+                if os.path.exists(record_file):
+                    print('  Found results, skipping', seq_name)
+                    continue
+
+                # state variables
+                boxes = []
+                times = []
+                failure = False
+                next_start = -1
+
+                # tracking loop
+                for f, img_file in enumerate(img_files):
+                    image = Image.open(img_file)
+                    if self.read_image:
+                        frame = image
+                    else:
+                        frame = img_file
+
+                    start_time = time.time()
+                    if f == 0:
+                        # initial frame
+                        tracker.maml_init(frame, anno_rects[0])
+                        boxes.append([1])
+                        # need to update the tracker here
+                    elif failure:
+                        # during failure frames
+                        if f == next_start:
+                            failure = False
+                            tracker.init(frame, anno_rects[f])
+                            boxes.append([1])
+                        else:
+                            start_time = np.NaN
+                            boxes.append([0])
+                    else:
+                        # during success frames
+                        box = tracker.update(frame)
+                        iou = poly_iou(anno[f], box, bound=image.size)
+                        if iou <= 0.0:
+                            # tracking failure
+                            failure = True
+                            next_start = f + self.skip_initialize
+                            boxes.append([2])
+                        else:
+                            # tracking succeed
+                            boxes.append(box)
+
+                    # store elapsed time
+                    times.append(time.time() - start_time)
+
+                    # visualize if required
+                    if visualize:
+                        if len(boxes[-1]) == 4:
+                            show_frame(image, boxes[-1])
+                        else:
+                            show_frame(image)
+
                 # record results
                 self._record(record_file, boxes, times)
 

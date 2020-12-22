@@ -52,9 +52,6 @@ if __name__ == '__main__':
         self.model.load_state_dict(self.state_dict, strict=False)
     '''
 
-
-
-
 # =============================================================================
 
 
@@ -70,14 +67,21 @@ VOT16_exp = ExperimentVOT(root_dir, version=2016, experiments='supervised', read
 VOT16_exp.run(tracker, visualize=False)
 #        p, ious, fail = VOT16_exp.report([tracker.name])
 '''
-for idx in range(30,49):
-    net_path = './pretrain/eccv_best/siamfc_alexnet_e{}.pth'.format(idx)
-    tracker = TrackerSiamFC(net_path=net_path, name='testing_e{}'.format(idx))
-    root_dir = '../dataset/VOT2018'
-    VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='supervised', read_image=False)
-    VOT_exp.run(tracker, visualize=False)
-    #ipdb.set_trace()
+# testing pretrain
+# =============================================================================
+#for idx in range(30, 49):
+#    net_path = './pretrain/eccv_best/siamfc_alexnet_e{}.pth'.format(idx)
+#    tracker = TrackerSiamFC(net_path=net_path, name='testing_e{}'.format(idx))
+#    root_dir = '../dataset/VOT2018'
+#    VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='supervised', read_image=False)
+#    VOT_exp.run(tracker, visualize=False)
+# =============================================================================
 
+net_path = './checkpoints/maml/epoch1.pth'
+tracker = TrackerSiamFC(net_path=net_path, name='testing_e{}'.format(1))
+root_dir = '../dataset/VOT2018'
+VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
+VOT_exp.run(tracker, visualize=False)
 
 """
 root_dir = 'D:/UDT_pytorch/track/dataset/OTB2015'
