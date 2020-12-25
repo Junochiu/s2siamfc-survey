@@ -264,8 +264,8 @@ class maml_trainer(nn.Module):
             'per_step_bn_statistics': False,
             'number_of_training_steps_per_iter': 5,
             'enable_inner_loop_optimizable_bn_params': True,  # not sure what this is meant for
-            'total_epochs': 10,
-            'total_iter_per_epoch': 20,
+            'total_epochs': 20,
+            'total_iter_per_epoch': 10000,
             'task_learning_rate': 0.001,  # need to check out from maml github
             'total_num_inner_loop_steps': 5,  # need to check out from maml github
             'use_second_order': True,
@@ -275,7 +275,7 @@ class maml_trainer(nn.Module):
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
-            'batches_per_iter':2
+            'batches_per_iter':4
         }
 
         for key, val in kwargs.items():
