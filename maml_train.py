@@ -275,7 +275,7 @@ class maml_trainer(nn.Module):
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
-            'batches_per_iter':4
+            'batches_per_iter':3
         }
 
         for key, val in kwargs.items():
