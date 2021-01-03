@@ -215,13 +215,15 @@ class ExperimentVOT(object):
                     if f == 0:
                         # initial frame
                         tracker.maml_init(frame, anno_rects[0])
+                        # tracker.init(frame, anno_rects[0])
                         boxes.append([1])
                         # need to update the tracker here
                     elif failure:
                         # during failure frames
                         if f == next_start:
                             failure = False
-                            tracker.init(frame, anno_rects[f])
+                            tracker.maml_init(frame, anno_rects[f])
+                            #tracker.init(frame, anno_rects[f])
                             boxes.append([1])
                         else:
                             start_time = np.NaN

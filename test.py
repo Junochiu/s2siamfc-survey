@@ -53,8 +53,6 @@ if __name__ == '__main__':
     '''
 
 # =============================================================================
-
-
 #         root_dir = 'E:/VID_val_100/Data'
 #         VID_exp = ExperimentVID_GOT(root_dir)
 #         VID_exp.run(tracker, visualize=False)

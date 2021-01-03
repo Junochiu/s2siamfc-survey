@@ -282,7 +282,81 @@ class TrackerSiamFC(Tracker):
             self.target_sz[1], self.target_sz[0]])
 
         return box
+        self.kernel = self.net.backbone(z)
 
+    def maml_init(self, img, box):
+        # convert box to 0-indexed and center based [y, x, h, w]
+        box = np.array([
+            box[1] - 1 + (box[3] - 1) / 2,
+            box[0] - 1 + (box[2] - 1) / 2,
+            box[3], box[2]], dtype=np.float32)
+        self.center, self.target_sz = box[:2], box[2:]
+
+        # create hanning window
+        self.upscale_sz = self.cfg.response_up * self.cfg.response_sz
+        self.hann_window = np.outer(
+            np.hanning(self.upscale_sz),
+            np.hanning(self.upscale_sz))
+        self.hann_window /= self.hann_window.sum()
+
+        # search scale factors
+        self.scale_factors = self.cfg.scale_step ** np.linspace(
+            -(self.cfg.scale_num // 2),
+            self.cfg.scale_num // 2, self.cfg.scale_num)
+
+        # exemplar and search sizes
+        context = self.cfg.context * np.sum(self.target_sz)
+        self.z_sz = np.sqrt(np.prod(self.target_sz + context))
+        self.x_sz = self.z_sz * \
+                    self.cfg.instance_sz / self.cfg.exemplar_sz
+
+        # loader img if path is given
+        if isinstance(img, string_types):
+            #            img = cv2_RGB_loader(img)
+            img = Image.open(img)
+
+        # =============================================================================
+        #         self.norm_trans = torchvision.transforms.Compose([
+        #         torchvision.transforms.ToPILImage(),
+        #         torchvision.transforms.ToTensor()])
+        # =============================================================================
+
+        # exemplar image
+        self.avg_color = np.mean(img, axis=(0, 1))
+        z = ops.crop_and_resize(
+            img, self.center, self.z_sz,
+            out_size=self.cfg.exemplar_sz,
+            border_value=self.avg_color)  # return cv2
+
+        z = cv2.normalize(z, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        # exemplar features
+        z = torch.from_numpy(z).to(
+            self.device).permute(2, 0, 1).unsqueeze(0).float()
+
+        # search images
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz * f,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color) for f in self.scale_factors]
+        x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
+        x = np.stack(x, axis=0)
+        x = torch.from_numpy(x).to(
+            self.device).permute(0, 3, 1, 2).float()
+
+        inference_update = 3
+        for idx in range(inference_update):
+            loss,_ = self.train_step([z,x,[0]])
+            self.optimizer.zero_grad()
+            loss.backward()
+            print("loss update in init = {}".format(loss))
+            self.optimizer.step()
+        # =============================================================================
+        #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
+        # =============================================================================
+        # set to evaluation mode
+        self.net.eval()
+        self.kernel = self.net.backbone(z)
     def track(self, img_files, box, visualize=True):
         frame_num = len(img_files)
         boxes = np.zeros((frame_num, 4))
@@ -438,8 +512,6 @@ class TrackerSiamFC(Tracker):
         # torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
         #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
         #torchvision.utils.save_image(z_masked_2, './test_z_masked_2.png')
-
-
 
         responses_masked_1 = self.net.forward(z_masked_1, x, num_step=num_step, params=names_weight_copy)
         responses_masked_2 = self.net.forward(z_masked_2, x, num_step=num_step, params=names_weight_copy)
