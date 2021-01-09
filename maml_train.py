@@ -40,21 +40,23 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.autograd.set_detect_anomaly(True)
 
+
 class maml_trainer(nn.Module):
     def __init__(self):
         super(maml_trainer, self).__init__()
-        '''
+
         if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
         else:
             self.device = torch.device('cpu')
-        '''
-        self.device = torch.cuda.current_device()
-   
+
+        # self.device = torch.cuda.current_device()
+        # ipdb.set_trace()
+
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/maml/'
+        self.save_dir = './checkpoints/maml_nomultiplestep/'
         self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
 
         # inner tracker related initialization
@@ -81,7 +83,7 @@ class maml_trainer(nn.Module):
             self.device = torch.cuda.current_device()
         self.to(self.device)
 
-        self.tracker = TrackerSiamFC(model=self.model,loss_setting=[0.5, 2.0, 0],
+        self.tracker = TrackerSiamFC(model=self.model, loss_setting=[0.5, 2.0, 0],
                                      maml_args=self.maml_args)  # add maml_args
         print("==========tracker initialized==========")
         self.cfg = self.tracker.cfg
@@ -92,13 +94,13 @@ class maml_trainer(nn.Module):
                                                                     use_learnable_learning_rates=self.maml_args.learnable_per_layer_per_step_inner_loop_learning_rate)
         self.inner_loop_optimizer.initialise(
             names_weights_dict=self.get_inner_loop_parameter_dict(params=self.model.named_parameters()))
- 
+
         self.to(self.device)
-       
+
         print("Inner Loop parameters")
-        for key,value in self.inner_loop_optimizer.named_parameters():
-            print(key,value.shape,value.device)
-       
+        for key, value in self.inner_loop_optimizer.named_parameters():
+            print(key, value.shape, value.device)
+
         # outer loop related initialization
         ''' [settings in maml]
         self.optimizer = optim.Adam(self.trainable_parameters(), lr=self.maml_args.meta_learning_rate, amsgrad=False)
@@ -106,20 +108,21 @@ class maml_trainer(nn.Module):
                                                             eta_min=self.maml_args.min_learning_rate)
         '''
         ''' [settings in original s2siamfc] '''
-        
+
         print("Outer Loop Parameters")
-        for name,param in self.named_parameters():
+        for name, param in self.named_parameters():
             if param.requires_grad:
-                print(name,param.shape,param.device,param.requires_grad)
+                print(name, param.shape, param.device, param.requires_grad)
 
         gamma = np.power(
             self.cfg.ultimate_lr / self.cfg.initial_lr,
             1.0 / self.cfg.epoch_num)
         self.optimizer = optim.SGD(
-            self.model.parameters(),
+            self.trainable_parameters(),
             lr=self.cfg.initial_lr,
             weight_decay=self.cfg.weight_decay,
             momentum=self.cfg.momentum)
+
         self.lr_scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma)
 
         # training related initialization
@@ -127,6 +130,14 @@ class maml_trainer(nn.Module):
         self.current_iter = 0
         self.current_epoch = 0
         # tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
+
+    def trainable_parameters(self):
+        """
+        Returns an iterator over the trainable parameters of the model.
+        """
+        for param in self.parameters():
+            if param.requires_grad:
+                yield param
 
     def get_per_step_loss_importance_vector(self):
         """
@@ -145,7 +156,7 @@ class maml_trainer(nn.Module):
 
         curr_value = np.minimum(
             loss_weights[-1] + (
-                        self.current_epoch * (self.maml_args.number_of_training_steps_per_iter - 1) * decay_rate),
+                    self.current_epoch * (self.maml_args.number_of_training_steps_per_iter - 1) * decay_rate),
             1.0 - ((self.maml_args.number_of_training_steps_per_iter - 1) * min_value_for_non_final_losses))
         loss_weights[-1] = curr_value
         loss_weights = torch.Tensor(loss_weights).to(device=self.device)
@@ -166,6 +177,12 @@ class maml_trainer(nn.Module):
                     if "norm_layer" not in name:
                         param_dict[name] = param.to(device=self.device)
         return param_dict
+
+    def print_outer_loop_param(self):
+        print("Outer Loop Parameters")
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                print(name, param.shape, param.device, param.requires_grad)
 
     def apply_inner_loop_update(self, loss, names_weights_copy, use_second_order, current_step_idx):
         """
@@ -208,35 +225,34 @@ class maml_trainer(nn.Module):
 
     def get_across_task_loss_metrics(self, total_losses):
         losses = dict()
-
         losses['loss'] = torch.mean(torch.stack(total_losses))
-
 
         return losses
 
     def load_pretrain(self):
-        filepath = os.path.join(".", "pretrain", "eccv_best", "siamfc_alexnet_e50.pth")
+        filepath = os.path.join(".", "pretrain", "eccv_best", "siamfc_alexnet_e41.pth")
         if torch.cuda.is_available():
-            self.state_dict = torch.load(filepath,map_location="cuda:0")
+            self.state_dict = torch.load(filepath, map_location="cuda:0")
         else:
             self.state_dict = torch.load(filepath, map_location="cpu")
         # model weight parsing
         oldkey = []
-        self.tmp_model = self.state_dict.copy()
-        for key in self.tmp_model.keys():
-            key_split = key.split(".")
-            if key_split[0] != 'head':
-                if key_split[2] == '0':
-                    key_split[2] = "conv"
-                elif key_split[2] == '1':
-                    key_split[2] = "norm_layer"
-                str = "."
-                new_key = str.join(key_split)
-                self.state_dict[new_key] = self.tmp_model[key]
-                oldkey.append(key)
-        for key in oldkey:
-            del self.state_dict[key]
-        self.model.load_state_dict(self.state_dict, strict=False)
+        with torch.no_grad():
+            self.tmp_model = self.state_dict.copy()
+            for key in self.tmp_model.keys():
+                key_split = key.split(".")
+                if key_split[0] != 'head':
+                    if key_split[2] == '0':
+                        key_split[2] = "conv"
+                    elif key_split[2] == '1':
+                        key_split[2] = "norm_layer"
+                    str = "."
+                    new_key = str.join(key_split)
+                    self.state_dict[new_key] = self.tmp_model[key]
+                    oldkey.append(key)
+            for key in oldkey:
+                del self.state_dict[key]
+            self.model.load_state_dict(self.state_dict, strict=False)
 
     def parse_maml_args(self, **kwargs):
         # default parameters
@@ -248,18 +264,18 @@ class maml_trainer(nn.Module):
             'per_step_bn_statistics': False,
             'number_of_training_steps_per_iter': 5,
             'enable_inner_loop_optimizable_bn_params': True,  # not sure what this is meant for
-            'total_epochs': 10,
-            'total_iter_per_epoch': 20,
+            'total_epochs': 20,
+            'total_iter_per_epoch': 10000,
             'task_learning_rate': 0.001,  # need to check out from maml github
             'total_num_inner_loop_steps': 5,  # need to check out from maml github
             'use_second_order': True,
             'use_learnable_learning_rates': True,  # because of maml++
-            'use_multi_step_loss_optimization': True,
+            'use_multi_step_loss_optimization': False,
             'multi_step_loss_num_epochs': 10,
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
             'num_steps': 5,
-            'batches_per_iter':2
+            'batches_per_iter': 3
         }
 
         for key, val in kwargs.items():
@@ -274,10 +290,10 @@ class maml_trainer(nn.Module):
         :param state: The state containing the experiment state and the network. It's in the form of a dictionary
         object.
         """
-        state['network'] = self.state_dict()
+        # state['network'] = self.state_dict()
         torch.save(state, f=model_save_dir)
 
-    def get_training_batches(self,seqs,supervised):
+    def get_training_batches(self, seqs, supervised):
         transforms = SiamFCTransforms(
             exemplar_sz=self.cfg.exemplar_sz,
             instance_sz=self.cfg.instance_sz,
@@ -290,14 +306,6 @@ class maml_trainer(nn.Module):
         self.dataloader = DataLoader(
             dataset,
             batch_size=self.cfg.batch_size,
-            shuffle=True,
-            num_workers=0,
-            pin_memory=self.cuda,
-            drop_last=True)
-
-        self.train_dataloader = DataLoader(
-            self.dataloader,
-            batch_size=self.maml_args.batches_per_iter,
             shuffle=True,
             num_workers=0,
             pin_memory=self.cuda,
@@ -340,11 +348,17 @@ class maml_trainer(nn.Module):
 
         # get training batches
 
-        #self.get_training_batches(seqs,supervised)
+        # self.get_training_batches(seqs,supervised)
         end = time.time()
-        total_losses = []
         while self.current_iter < self.maml_args.total_epochs * self.maml_args.total_iter_per_epoch:
+            self.model.train()
             self.model.zero_grad()
+            self.optimizer.zero_grad()
+            self.inner_loop_optimizer.zero_grad()
+            self.zero_grad()
+            total_losses = []
+            # print out the trainable parameter to check require_grad
+            self.print_outer_loop_param()
             for it, batch in enumerate(dataloader):
                 print("------------------------------------------------------")
                 print("current it = {}".format(it))
@@ -353,6 +367,12 @@ class maml_trainer(nn.Module):
                 per_step_loss_importance_vectors = self.get_per_step_loss_importance_vector()
                 names_weights_copy = self.get_inner_loop_parameter_dict(self.model.named_parameters())
                 num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
+
+                names_weights_copy = {
+                    name.replace('module.', ''): value.unsqueeze(0).repeat(
+                        [num_devices] + [1 for i in range(len(value.shape))]) for
+                    name, value in names_weights_copy.items()}
+
                 for num_step in range(self.maml_args.num_steps):
                     print("current step = {}".format(num_step))
                     query_batch, support_loss, responses = self.tracker.train_step(batch,
@@ -366,9 +386,10 @@ class maml_trainer(nn.Module):
                                                                       use_second_order=self.maml_args.use_second_order,
                                                                       current_step_idx=num_step)
                     print("===inner_loop_updated")
-                    if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
-                        names_weights_copy = {key: torch.squeeze(value,0) for key, value in names_weights_copy.items()}
+                    names_weights_copy = {key: torch.squeeze(value, 0) for key, value in names_weights_copy.items()}
 
+                    if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
+                        print("===computing multistep loss")
                         query_loss, responses = self.tracker.query_step(query_batch,
                                                                         names_weight_copy=names_weights_copy,
                                                                         phase='query', num_step=num_step)
@@ -381,7 +402,7 @@ class maml_trainer(nn.Module):
                             query_loss, responses = self.tracker.query_step(query_batch, names_weights_copy,
                                                                             phase='query', num_step=num_step)
                             query_losses.append(query_loss)
-                            writer.add_scalar('query_loss',query_loss,it*self.maml_args.num_steps+num_step)
+                            writer.add_scalar('query_loss', query_loss, it * self.maml_args.num_steps + num_step)
                             print("===query step")
                             print("==========query loss = {}".format(query_loss))
                 task_losses = torch.sum(torch.stack(query_losses))
@@ -390,36 +411,34 @@ class maml_trainer(nn.Module):
                     self.model.restore_backup_stats()
                 if it % self.maml_args.batches_per_iter == 0:
                     print("===outer_loop_updated")
-                   # with torch.autograd.set_detect_anomaly(True):
-                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-                    for idx, item in enumerate(per_step_loss_importance_vectors):
-                        losses['loss_importance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-                    self.optimizer.zero_grad()
-                    loss = losses['loss']
-                    #loss.backward(retain_graph=True)  # check out the loss here
-                    torch.autograd.set_detect_anomaly(True)
-                    loss.backward(retain_graph=True)  # check out the loss here
-                    self.optimizer.step()
-                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
                     self.optimizer.zero_grad()
                     self.zero_grad()
                     self.model.zero_grad()
+                    losses = self.get_across_task_loss_metrics(total_losses=total_losses)
+                    for idx, item in enumerate(per_step_loss_importance_vectors):
+                        losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
+                    loss = losses['loss']
+                    torch.autograd.set_detect_anomaly(True)
+                    loss.backward()  # check out the loss here
+                    self.optimizer.step()
+                    losses['learning_rate'] = self.lr_scheduler.get_lr()[0]
+                    total_losses = []
+            print("=== epoch{} model saved ===".format(self.current_epoch))
+            writer.add_scalar('epoch_loss', loss, self.current_epoch)
+            self.save_model(os.path.join(self.save_dir, "{}.pth".format(self.current_epoch)),
+                            self.model.state_dict())
+            self.current_epoch = self.current_epoch + 1
+            '''
             self.current_iter = self.current_iter + 1
             losses = self.get_across_task_loss_metrics(total_losses=total_losses)
             loss = losses['loss']
             writer.add_scalar('iter_loss', loss, self.current_iter)
             if self.current_iter % self.maml_args.total_iter_per_epoch == 0:
+                print("=== epoch{} model saved ===".format(self.current_epoch))
                 self.current_epoch = self.current_epoch + 1
                 writer.add_scalar('epoch_loss', loss, self.current_epoch)
                 self.save_model(os.path.join(self.save_dir,"epoch{}.pth".format(self.current_epoch)),self.model.state_dict)
-            '''
-            losses = self.get_across_task_loss_metrics(total_losses=total_losses)
-            for idx, item in enumerate(per_step_loss_importance_vectors):
-                losses['loss_impoertance_vector_{}'.format(idx)] = item.detach().cpu().numpy()
-            '''
-            #self.meta_update(loss=losses['loss'])
-
-
+           '''
 
         # run inner loop (support set) + returning query set
         # inner loop update

@@ -35,15 +35,17 @@ class AlexNet(nn.Module):
         # in original model, normalization should be true. However, the model loaded doesn'y come up with bn layer
 
     def forward(self, x, params, num_step):
-        param = extract_top_level_dict(params)
-        param_backbone = extract_top_level_dict(param['backbone'])
-        x = self.conv1.forward(x, num_step, params=param_backbone['conv1'])
+        #param = extract_top_level_dict(params)
+        #param_backbone = extract_top_level_dict(param['backbone'])
+
+        params = extract_top_level_dict(params)
+        x = self.conv1.forward(x, num_step, params=params['conv1'])
         x = self.pool1(x)
-        x = self.conv2.forward(x, num_step, params=param_backbone['conv2'])
+        x = self.conv2.forward(x, num_step, params=params['conv2'])
         x = self.pool2(x)
-        x = self.conv3.forward(x, num_step, params=param_backbone['conv3'])
-        x = self.conv4.forward(x, num_step, params=param_backbone['conv4'])
-        x = self.conv5.forward(x, num_step, params=param_backbone['conv5'])
+        x = self.conv3.forward(x, num_step, params=params['conv3'])
+        x = self.conv4.forward(x, num_step, params=params['conv4'])
+        x = self.conv5.forward(x, num_step, params=params['conv5'])
         return x
 
 

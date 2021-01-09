@@ -29,10 +29,11 @@ class SiamFC(nn.Module):
     def forward(self, z, x,num_step,params):
         if self.BN:
             if params is not None:
-                params = {key: value for key, value in params.items()}
-                param = extract_top_level_dict(params)
-                param_head = extract_top_level_dict(param['head'])
-                return self.map_norm(self._fast_xcorr(z, x),num_step,params=param_head['map_norm'])
+                #params = {key: value for key, value in params.items()}
+                #param = extract_top_level_dict(params)
+                #param_head = extract_top_level_dict(param['head'])
+                params = extract_top_level_dict(params)
+                return self.map_norm(self._fast_xcorr(z, x),num_step,params=params['map_norm'])
             else:
                 return self.map_norm(self._fast_xcorr(z, x),num_step)
         else:

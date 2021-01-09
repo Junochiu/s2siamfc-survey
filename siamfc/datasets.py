@@ -141,7 +141,25 @@ class Pair(Dataset):
     
     def _cxy_wh_2_bbox(self, cxy, wh):
         return np.array([cxy[0] - wh[0] / 2, cxy[1] - wh[1] / 2, cxy[0] + wh[0] / 2, cxy[1] + wh[1] / 2])
+'''
+    def get_random_pair(self, img, transforms):
 
+        z = self.img_loader(img)  # get RGB img
+
+        img_h, img_w, _ = z.shape
+
+        target_sz = [img_w // np.random.randint(4, 9), img_h // np.random.randint(4, 9)]
+        target_pos = [np.random.randint(target_sz[0], (img_w - target_sz[0])),
+                      np.random.randint(target_sz[1], (img_h - target_sz[1]))]
+
+        box = self._cxy_wh_2_bbox(target_pos, target_sz)
+
+        item = (z, z, box, box)
+        if transforms is not None:
+            item = transforms(*item)
+        ipdb.set_trace()
+        return item
+'''
 
 class maml_Pair(Dataset):
 

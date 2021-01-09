@@ -25,6 +25,7 @@ from .maml_heads import SiamFC, SiamFC_1x1_DW
 from .losses import AC_BalancedLoss, BalancedLoss, RankLoss
 from .datasets import Pair
 from .transforms import SiamFCTransforms
+from .maml_basicstructure import extract_top_level_dict
 from utils.lr_helper import build_lr_scheduler
 from utils.img_loader import cv2_RGB_loader
 from got10k.trackers import Tracker
@@ -50,14 +51,18 @@ class Net(nn.Module):
         self.back_z = backward_hook_z
 
     def forward(self, z, x, params=None, num_step=0):
+        param_dict = dict()
         if params is None:
             z = self.backbone(z)
             x = self.backbone(x)
             return self.head(z, x)
         else:
-            z = self.backbone(z, params=params, num_step=num_step)
-            x = self.backbone(x, params=params, num_step=num_step)
-            return self.head(z, x, params=params, num_step=num_step)
+            params = {key:value[0] for key,value in params.items()}
+            param_dict = extract_top_level_dict(current_dict=params)
+
+            z = self.backbone(z, params=param_dict['backbone'], num_step=num_step)
+            x = self.backbone(x, params=param_dict['backbone'], num_step=num_step)
+            return self.head(z, x, params=param_dict['head'], num_step=num_step)
 
     def zero_grad(self, params=None):
         if params is None:
@@ -77,8 +82,7 @@ class Net(nn.Module):
                             params[name].grad = None
 
 class TrackerSiamFC(Tracker):
-
-    def __init__(self, model,maml_args, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0], **kwargs):
+    def __init__(self, model,maml_args=None, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0], **kwargs):
         super(TrackerSiamFC, self).__init__(name, True)
         self.cfg = self.parse_args(**kwargs)
 
@@ -189,6 +193,10 @@ class TrackerSiamFC(Tracker):
         #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
         # =============================================================================
 
+
+
+
+
         self.kernel = self.net.backbone(z)
 
     @torch.no_grad()
@@ -274,7 +282,81 @@ class TrackerSiamFC(Tracker):
             self.target_sz[1], self.target_sz[0]])
 
         return box
+        self.kernel = self.net.backbone(z)
 
+    def maml_init(self, img, box):
+        # convert box to 0-indexed and center based [y, x, h, w]
+        box = np.array([
+            box[1] - 1 + (box[3] - 1) / 2,
+            box[0] - 1 + (box[2] - 1) / 2,
+            box[3], box[2]], dtype=np.float32)
+        self.center, self.target_sz = box[:2], box[2:]
+
+        # create hanning window
+        self.upscale_sz = self.cfg.response_up * self.cfg.response_sz
+        self.hann_window = np.outer(
+            np.hanning(self.upscale_sz),
+            np.hanning(self.upscale_sz))
+        self.hann_window /= self.hann_window.sum()
+
+        # search scale factors
+        self.scale_factors = self.cfg.scale_step ** np.linspace(
+            -(self.cfg.scale_num // 2),
+            self.cfg.scale_num // 2, self.cfg.scale_num)
+
+        # exemplar and search sizes
+        context = self.cfg.context * np.sum(self.target_sz)
+        self.z_sz = np.sqrt(np.prod(self.target_sz + context))
+        self.x_sz = self.z_sz * \
+                    self.cfg.instance_sz / self.cfg.exemplar_sz
+
+        # loader img if path is given
+        if isinstance(img, string_types):
+            #            img = cv2_RGB_loader(img)
+            img = Image.open(img)
+
+        # =============================================================================
+        #         self.norm_trans = torchvision.transforms.Compose([
+        #         torchvision.transforms.ToPILImage(),
+        #         torchvision.transforms.ToTensor()])
+        # =============================================================================
+
+        # exemplar image
+        self.avg_color = np.mean(img, axis=(0, 1))
+        z = ops.crop_and_resize(
+            img, self.center, self.z_sz,
+            out_size=self.cfg.exemplar_sz,
+            border_value=self.avg_color)  # return cv2
+
+        z = cv2.normalize(z, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        # exemplar features
+        z = torch.from_numpy(z).to(
+            self.device).permute(2, 0, 1).unsqueeze(0).float()
+
+        # search images
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz * f,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color) for f in self.scale_factors]
+        x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
+        x = np.stack(x, axis=0)
+        x = torch.from_numpy(x).to(
+            self.device).permute(0, 3, 1, 2).float()
+
+        inference_update = 3
+        for idx in range(inference_update):
+            loss,_ = self.train_step([z,x,[0]])
+            self.optimizer.zero_grad()
+            loss.backward()
+            print("loss update in init = {}".format(loss))
+            self.optimizer.step()
+        # =============================================================================
+        #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
+        # =============================================================================
+        # set to evaluation mode
+        self.net.eval()
+        self.kernel = self.net.backbone(z)
     def track(self, img_files, box, visualize=True):
         frame_num = len(img_files)
         boxes = np.zeros((frame_num, 4))
@@ -393,7 +475,7 @@ class TrackerSiamFC(Tracker):
             # set network mode
 
 
-        self.net.train(backward)
+        #self.net.train(backward)
 
 
         # parse batch data
@@ -404,14 +486,17 @@ class TrackerSiamFC(Tracker):
         #torchvision.utils.save_image(z, './test_z.png')
         #torchvision.utils.save_image(x, './test_x.png')
 
+        param_dict = dict()
+        params = {key: value[0] for key, value in names_weight_copy.items()}
+        param_dict = extract_top_level_dict(current_dict=params)
 
         # inference
-        feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
-        feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
+        feat_z = self.net.backbone(z, num_step=num_step, params=param_dict['backbone'])
+        feat_x = self.net.backbone(x, num_step=num_step, params=param_dict['backbone'])
 
         feat_z.register_hook(self.net.back_z)
 
-        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
+        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=param_dict['head'])
 
         labels = get_labels(responses)
 
@@ -421,6 +506,8 @@ class TrackerSiamFC(Tracker):
         z_masked_2 = get_adv_mask_img(z, feat_z, grad_z)
         if phase == 'support':
             query_set = get_adv_mask_img(z, feat_z, grad_z)
+            #torchvision.utils.save_image(query_set, './query_set.png')
+        #ipdb.set_trace()
 
         # torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
         #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
@@ -464,10 +551,7 @@ class TrackerSiamFC(Tracker):
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
-        with torch.no_grad():
-            feat_z = self.net.backbone(z, num_step=num_step, params=names_weight_copy)
-            feat_x = self.net.backbone(x, num_step=num_step, params=names_weight_copy)
-        responses = self.net.head(feat_z, feat_x, num_step=num_step, params=names_weight_copy)
+        responses = self.net.forward(z,x,params=names_weight_copy)
         labels = get_labels(responses)
         loss = self.criterion(responses, labels)
 
