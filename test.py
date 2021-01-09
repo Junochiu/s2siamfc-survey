@@ -75,12 +75,24 @@ VOT16_exp.run(tracker, visualize=False)
 #    VOT_exp.run(tracker, visualize=False)
 # =============================================================================
 
-net_path = './checkpoints/maml/epoch1.pth'
-tracker = TrackerSiamFC(net_path=net_path, name='testing_e{}'.format(1))
-root_dir = '../dataset/VOT2018'
-VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
-VOT_exp.run(tracker, visualize=False)
+# testing pretrain with initial update
+# =============================================================================
+#net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
+#tracker = TrackerSiamFC(net_path=net_path, name='41_with_initial_update1')
+#root_dir = '../dataset/VOT2018'
+#VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
+#VOT_exp.run(tracker, visualize=False)
+# =============================================================================
 
+# testing maml trained model
+# =============================================================================
+for i in range(9):
+    net_path = './checkpoints/maml_nomultiplestep/{}.pth'.format(i)
+    tracker = TrackerSiamFC(net_path=net_path, name='maml_nomultiplestep_{}'.format(i))
+    root_dir = '../dataset/VOT2018'
+    VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
+    VOT_exp.run(tracker, visualize=False)
+# =============================================================================
 """
 root_dir = 'D:/UDT_pytorch/track/dataset/OTB2015'
 OTB_exp = ExperimentOTB(root_dir, version=2015)

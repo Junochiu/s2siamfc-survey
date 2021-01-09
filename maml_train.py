@@ -56,7 +56,7 @@ class maml_trainer(nn.Module):
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/maml/'
+        self.save_dir = './checkpoints/maml_nomultiplestep/'
         self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
 
         # inner tracker related initialization
@@ -270,7 +270,7 @@ class maml_trainer(nn.Module):
             'total_num_inner_loop_steps': 5,  # need to check out from maml github
             'use_second_order': True,
             'use_learnable_learning_rates': True,  # because of maml++
-            'use_multi_step_loss_optimization': True,
+            'use_multi_step_loss_optimization': False,
             'multi_step_loss_num_epochs': 10,
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
@@ -386,9 +386,10 @@ class maml_trainer(nn.Module):
                                                                       use_second_order=self.maml_args.use_second_order,
                                                                       current_step_idx=num_step)
                     print("===inner_loop_updated")
-                    if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
-                        names_weights_copy = {key: torch.squeeze(value, 0) for key, value in names_weights_copy.items()}
+                    names_weights_copy = {key: torch.squeeze(value, 0) for key, value in names_weights_copy.items()}
 
+                    if self.maml_args.use_multi_step_loss_optimization and training_phase and self.current_epoch < self.maml_args.multi_step_loss_num_epochs:
+                        print("===computing multistep loss")
                         query_loss, responses = self.tracker.query_step(query_batch,
                                                                         names_weight_copy=names_weights_copy,
                                                                         phase='query', num_step=num_step)
@@ -398,8 +399,6 @@ class maml_trainer(nn.Module):
                         print("==========query loss = {}".format(query_loss))
                     else:
                         if num_step == (self.maml_args.number_of_training_steps_per_iter - 1):
-                            names_weights_copy = {key: torch.squeeze(value, 0) for key, value in
-                                                  names_weights_copy.items()}
                             query_loss, responses = self.tracker.query_step(query_batch, names_weights_copy,
                                                                             phase='query', num_step=num_step)
                             query_losses.append(query_loss)
