@@ -335,7 +335,7 @@ class maml_trainer(nn.Module):
             context=self.cfg.context)
         dataset = Pair(
             seqs=seqs,
-            transforms=transforms, supervised=supervised, img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+            transforms=transforms, supervised=supervised, img_loader=cv2_RGB_loader, neg=self.cfg.neg, gen_query=True)
 
         # setup dataloader
         dataloader = DataLoader(

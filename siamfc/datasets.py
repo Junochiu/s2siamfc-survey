@@ -13,7 +13,7 @@ __all__ = ['Pair']
 class Pair(Dataset):
 
     def __init__(self, seqs, transforms=None,
-                 pairs_per_seq=1, supervised='supervised', neg=False, img_loader=None):
+                 pairs_per_seq=1, supervised='supervised', neg=False, img_loader=None, gen_query=False):
         super(Pair, self).__init__()
         self.seqs = seqs
         self.transforms = transforms
@@ -23,6 +23,7 @@ class Pair(Dataset):
         self.supervised = supervised
         self.rangeup = 10
         self.neg = neg
+        self.gen_query = gen_query
         if self.neg:
             self.cluster_dict = json.load(open('./cluster_dict.json'), object_pairs_hook=OrderedDict)
 
@@ -39,7 +40,7 @@ class Pair(Dataset):
             neg = self.neg and self.neg > np.random.rand()
             if neg:
                 random_fid_z = np.random.choice(len(img_files))
-                
+
                 cluster_z_list = self.cluster_dict[str(cluster_id)]
                 random_vid_neg = np.random.choice(cluster_z_list)
                 
@@ -50,7 +51,9 @@ class Pair(Dataset):
                 img_files_neg = [os.path.join(seq_dir_neg, '%06d.JPEG' % f) for f in frames_neg]
                 
                 random_fid_neg = np.random.choice(len(img_files_neg))
-
+                random_fid_query = np.random.choice(len(img_files_neg))
+                while random_fid_neg == random_fid_query:
+                    random_fid_query = np.random.choice(len(img_files_neg))
 # =============================================================================
 #                 random_vid_neg = np.random.choice(len(self))
 #                 random_vid_neg = self.indices[random_vid_neg % len(self.indices)]
@@ -72,7 +75,8 @@ class Pair(Dataset):
 #                random_fid1, random_fid2 = np.random.choice(a=len(img_files), size=2, replace=False)
                 z = self.img_loader(img_files[random_fid_z])
                 x = self.img_loader(img_files_neg[random_fid_neg])
-             
+                query_x = self.img_loader(img_files_neg[random_fid_query])
+
 # =============================================================================
 #                 z = cv2.imread(img_files[random_fid_z], cv2.IMREAD_COLOR)
 #                 x = cv2.imread(img_files_neg[random_fid_neg], cv2.IMREAD_COLOR)
@@ -82,6 +86,7 @@ class Pair(Dataset):
 
                 imgz_h, imgz_w, _ = z.shape
                 imgx_h, imgx_w, _ = x.shape
+                imgq_h, imgq_w, _ = query_x.shape
 #                target_pos = [img_w//2, img_h//2]
 #                target_sz = [img_w//6, img_h//6]
 
@@ -90,12 +95,19 @@ class Pair(Dataset):
 
                 target_sz_x = [imgx_w//np.random.randint(4, 9), imgx_h//np.random.randint(4, 9)]
                 target_pos_x = [np.random.randint(target_sz_x[0], (imgx_w-target_sz_x[0])), np.random.randint(target_sz_x[1], (imgx_h-target_sz_x[1]))]
-                
+
+                target_sz_q = [imgq_w // np.random.randint(4, 9), imgq_h // np.random.randint(4, 9)]
+                target_pos_q = [np.random.randint(target_sz_q[0], (imgq_w - target_sz_q[0])),
+                                np.random.randint(target_sz_q[1], (imgq_h - target_sz_q[1]))]
 
                 box_z = self._cxy_wh_2_bbox(target_pos_z, target_sz_z)
                 box_x = self._cxy_wh_2_bbox(target_pos_x, target_sz_x)
-                
-                item = (z, x, box_z, box_x)
+                box_q = self._cxy_wh_2_bbox(target_pos_q, target_sz_q)
+
+                if self.gen_query:
+                    item = (z, x, query_x, box_z, box_x, box_q)
+                else:
+                    item = (z, x, box_z, box_x)
                 if self.transforms is not None:
                     item = self.transforms(*item)
                                 
