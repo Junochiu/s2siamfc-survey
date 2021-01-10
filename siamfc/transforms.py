@@ -120,14 +120,17 @@ class SiamFCTransforms(object):
 
 
     
-    def __call__(self, z, x, box_z, box_x):
+    def __call__(self, z, x, box_z, box_x, q=None, box_q=None):
         z = self._crop(z, box_z, self.instance_sz)
         x = self._crop(x, box_x, self.instance_sz)
+        #if np.any(q!=None):
+        q = self._crop(q, box_q, self.instance_sz)
+        q = self.transforms_x(q)
         z = self.transforms_z(z)
         x = self.transforms_x(x)
-        
-    
-        return z, x, box_z, box_x
+        #if np.any(q!=None):
+        return z, x, q, box_z, box_x, box_q
+        #return z, x, box_z, box_x
     
     def _crop(self, img, box, out_size):
         # convert box to 0-indexed and center based [y, x, h, w]

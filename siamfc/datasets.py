@@ -105,8 +105,10 @@ class Pair(Dataset):
                 box_q = self._cxy_wh_2_bbox(target_pos_q, target_sz_q)
 
                 if self.gen_query:
-                    item = (z, x, query_x, box_z, box_x, box_q)
-                else:
+                    item = (z, x, box_x, box_z,query_x, box_q)
+                    #if self.transforms is not None:
+                    #    query_item = self.transforms(*query_item)
+                else:    
                     item = (z, x, box_z, box_x)
                 if self.transforms is not None:
                     item = self.transforms(*item)
