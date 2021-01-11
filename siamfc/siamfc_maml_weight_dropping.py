@@ -526,9 +526,12 @@ class TrackerSiamFC(Tracker):
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked * masked_2_loss
         if phase == 'support':
             return [q_z, q_x, neg], loss_siam, responses
+        elif phase == 'support oritemp':
+            return [q_z, x, z, neg], loss_siam, responses
+
         return loss_siam, responses
 
-    def query_step(self,batch, names_weight_copy, phase, num_step, backward=False):
+    def query_step(self,batch, names_weight_copy, phase, num_step, backward=False, original_temp=False):
         def get_labels(responses):
             # create labels
             r_b, r_c, r_w, r_h = responses.size()
@@ -554,9 +557,20 @@ class TrackerSiamFC(Tracker):
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
+
+        #feat_z = self.net.backbone(z, num_step=num_step, params=param_dict['backbone'])
+        #feat_x = self.net.backbone(x, num_step=num_step, params=param_dict['backbone'])
+        #responses = self.net.head(feat_z, feat_x, num_step=num_step, params=param_dict['head'])
+
         responses = self.net.forward(z,x,params=names_weight_copy)
-        labels = get_labels(responses)
-        loss = self.criterion(responses, labels)
+        if original_temp:
+            original_x = batch[2].to(self.device,non_blocking=self.cuda)
+            original_responses = self.net.forward(original_responses,x,param=names_weight_copy)
+            labels = get_labels(original_responses)
+            loss = self.cfg.no_mask * self.criterion(original_responses,labels) + self.cfg.masked * self.criterion(responses,labels)
+        else:
+            labels = get_labels(responses)
+            loss = self.criterion(responses, labels)
 
         return loss, responses
 
