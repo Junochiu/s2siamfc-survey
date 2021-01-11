@@ -481,7 +481,9 @@ class TrackerSiamFC(Tracker):
         # parse batch data
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
-        q_x = batch[2].to(self.device, non_blocking=self.cuda)
+        if phase == "support":
+            q_z = batch[2].to(self.device, non_blocking=self.cuda)
+            q_x = batch[3].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
 
         #torchvision.utils.save_image(z, './test_z.png')
@@ -523,7 +525,7 @@ class TrackerSiamFC(Tracker):
 
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked * masked_2_loss
         if phase == 'support':
-            return [batch[0], q_x, neg], loss_siam, responses
+            return [q_z, q_x, neg], loss_siam, responses
         return loss_siam, responses
 
     def query_step(self,batch, names_weight_copy, phase, num_step, backward=False):

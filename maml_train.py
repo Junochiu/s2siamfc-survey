@@ -56,7 +56,7 @@ class maml_trainer(nn.Module):
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/maml_rdn_query/'
+        self.save_dir = './checkpoints/maml_rdn_query_pair/'
         self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
 
         # inner tracker related initialization
