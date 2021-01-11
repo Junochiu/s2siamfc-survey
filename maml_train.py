@@ -56,7 +56,7 @@ class maml_trainer(nn.Module):
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/maml_nomultiplestep/'
+        self.save_dir = './checkpoints/maml_rdn_query/'
         self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
 
         # inner tracker related initialization
@@ -270,7 +270,7 @@ class maml_trainer(nn.Module):
             'total_num_inner_loop_steps': 5,  # need to check out from maml github
             'use_second_order': True,
             'use_learnable_learning_rates': True,  # because of maml++
-            'use_multi_step_loss_optimization': False,
+            'use_multi_step_loss_optimization': True,
             'multi_step_loss_num_epochs': 10,
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
@@ -326,7 +326,7 @@ class maml_trainer(nn.Module):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-        writer = SummaryWriter('runs/maml_first_try')
+        writer = SummaryWriter('runs/maml_rdn_query')
 
         # setup dataset
         transforms = SiamFCTransforms(

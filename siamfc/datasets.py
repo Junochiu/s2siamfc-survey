@@ -39,6 +39,7 @@ class Pair(Dataset):
         if self.supervised == 'self-supervised':
             neg = self.neg and self.neg > np.random.rand()
             if neg:
+                print("-----neg-----")
                 random_fid_z = np.random.choice(len(img_files))
 
                 cluster_z_list = self.cluster_dict[str(cluster_id)]
@@ -115,6 +116,7 @@ class Pair(Dataset):
                                 
                 return item + (neg, )            
             else:
+                print("-----not neg-----")
                 random_fid = np.random.choice(len(img_files))
 # =============================================================================
 #                 z = cv2.imread(img_files[random_fid], cv2.IMREAD_COLOR)
@@ -132,7 +134,10 @@ class Pair(Dataset):
 
                 box = self._cxy_wh_2_bbox(target_pos, target_sz)
                 
-                item = (z, z, box, box)
+                if self.gen_query:
+                    item = (z, z, box, box,z,box)
+                else:
+                    item = (z,z,box,box)
                 if self.transforms is not None:
                     item = self.transforms(*item)
                        
