@@ -213,6 +213,8 @@ class ExperimentVOT(object):
 
                     start_time = time.time()
                     if f == 0:
+                        # initial tracker frame
+                        tracker.reload()
                         # initial frame
                         tracker.maml_init(frame, anno_rects[0])
                         # tracker.init(frame, anno_rects[0])

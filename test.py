@@ -77,21 +77,21 @@ VOT16_exp.run(tracker, visualize=False)
 
 # testing pretrain with initial update
 # =============================================================================
-#net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
-#tracker = TrackerSiamFC(net_path=net_path, name='41_with_initial_update1')
-#root_dir = '../dataset/VOT2018'
-#VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
-#VOT_exp.run(tracker, visualize=False)
+net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
+tracker = TrackerSiamFC(net_path=net_path, name='41_finetuned_OT')
+root_dir = '../dataset/VOT2018'
+VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
+VOT_exp.run(tracker, visualize=False)
 # =============================================================================
 
 # testing maml trained model
 # =============================================================================
-for i in range(6):
-    net_path = './checkpoints/maml_rdn_query/{}.pth'.format(i)
-    tracker = TrackerSiamFC(net_path=net_path, name='maml_rdn_query_{}'.format(i))
-    root_dir = '../dataset/VOT2018'
-    VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
-    VOT_exp.run(tracker, visualize=False)
+#for i in range(0,3):
+#    net_path = 'checkpoints/maml_rdn_query_pair_maml_optim_sche/{}.pth'.format(i)
+#    tracker = TrackerSiamFC(net_path=net_path, name='pretrain_w_transform_o_resize_maml_optim_sche{}'.format(i))
+#    root_dir = '../dataset/VOT2018'
+#    VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
+#    VOT_exp.run(tracker, visualize=False)
 # =============================================================================
 """
 root_dir = 'D:/UDT_pytorch/track/dataset/OTB2015'

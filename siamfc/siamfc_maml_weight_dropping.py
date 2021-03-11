@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import random
 import ipdb
 import torch
 import torch.nn as nn
@@ -343,6 +344,14 @@ class TrackerSiamFC(Tracker):
         x = np.stack(x, axis=0)
         x = torch.from_numpy(x).to(
             self.device).permute(0, 3, 1, 2).float()
+         
+        # add transform
+        transforms = SiamFCTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+
+        x,z = transforms.inference_transform(x,z)
 
         inference_update = 3
         for idx in range(inference_update):
@@ -485,9 +494,10 @@ class TrackerSiamFC(Tracker):
             q_z = batch[2].to(self.device, non_blocking=self.cuda)
             q_x = batch[3].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
-
-        #torchvision.utils.save_image(z, './test_z.png')
-        #torchvision.utils.save_image(x, './test_x.png')
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(z, './z_{}.png'.format(rdn))
+        torchvision.utils.save_image(x, './x_{}.png'.format(rdn))
 
         param_dict = dict()
         params = {key: value[0] for key, value in names_weight_copy.items()}

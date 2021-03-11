@@ -134,7 +134,7 @@ class Pair(Dataset):
                 return item + (neg, )            
             else:
                 #print("-----not neg-----")
-                random_fid = np.random.choice(len(img_files))
+                random_fid = np.random.choice(range(1,len(img_files)))
 # =============================================================================
 #                 z = cv2.imread(img_files[random_fid], cv2.IMREAD_COLOR)
 #     #            x = cv2.imread(img_files[random_fid], cv2.IMREAD_COLOR)

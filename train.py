@@ -5,6 +5,7 @@ from time import localtime, strftime
 
 
 from datasets.vid import ImageNetVID
+from datasets.vot import VOT
 #from datasets.coco import Coco
 import random
 
@@ -28,12 +29,19 @@ torch.backends.cudnn.benchmark = False
 if __name__ == '__main__':
     
     save_dir = './checkpoints/'
-    save_path = os.path.join(save_dir, 'S2SiamFC')
-    
-    neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
-    root_dir = '../dataset/ILSVRC2015'      #Dataset path
-    seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
-    
+    save_path = os.path.join(save_dir, 'S2SiamFC_finetuned')
+
+# =============================================================================    
+#    neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
+#    root_dir = '../dataset/ILSVRC2015'      #Dataset path
+#    seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
+# =============================================================================
+   
+# =============================================================================
+    root_dir = '../dataset/VOT2018'
+    seqs = VOT(root_dir, subset=['train'])
+# =============================================================================
+
 # =============================================================================
 #     root_dir = 'E:\SiamMask\data\coco'
 #     seqs = Coco(root_dir, subset=['train'])
@@ -44,10 +52,18 @@ if __name__ == '__main__':
 #     root_dir = 'E:/GOT10K'
 #     seqs = GOT10k(root_dir, subset='train')
 # =============================================================================
-    
+
+
+# =============================================================================
+#    mode = ['supervised', 'self-supervised']
+#    tracker = TrackerSiamFC(loss_setting=[0.5, 2.0, 0])
+#    tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
+#    print(strftime("%Y-%m-%d %H:%M:%neg_dirS", localtime()))
+# =============================================================================
     mode = ['supervised', 'self-supervised']
-    #net_path = os.path.join('pretrain','eccv_best','siamfc_alexnet_e50.pth')
+    net_path = os.path.join('pretrain','eccv_best','siamfc_alexnet_e42.pth')
     tracker = TrackerSiamFC(loss_setting=[0.5, 2.0, 0])
     tracker.train_over(seqs, supervised=mode[1], save_dir=save_path)
     #tracker.meta_train_over(seqs, supervised=mode[1], save_dir=save_path)
     print(strftime("%Y-%m-%d %H:%M:%neg_dirS", localtime()))
+# =============================================================================

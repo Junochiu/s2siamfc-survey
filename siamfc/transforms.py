@@ -61,6 +61,7 @@ class CenterCrop(object):
         npad = max(0, -i, -j)
         if npad > 0:
             avg_color = np.mean(img, axis=(0, 1))
+            #print("avg_color = {}".format(avg_color))
             img = cv2.copyMakeBorder(
                 img, npad, npad, npad, npad,
                 cv2.BORDER_CONSTANT, value=avg_color)
@@ -91,6 +92,36 @@ class RandomCrop(object):
 #    def __call__(self, img):
 #        return torch.from_numpy(img).float().permute((2, 0, 1))
 
+class inferenceTransforms(object):
+    def __init__(self,exemplar_sz=127, instance_sz=255, context=0.5):        
+        self.transforms_z = Compose([
+            RandomStretch(),
+            CenterCrop(instance_sz - 8),
+            RandomCrop(instance_sz - 2 * 8),
+            CenterCrop(exemplar_sz),
+            torchvision.transforms.ToPILImage(),
+#            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.RandomRotation(90),
+            torchvision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            torchvision.transforms.ToTensor()
+            ])
+        self.transforms_x = Compose([
+            RandomStretch(),
+            CenterCrop(instance_sz - 8),
+            RandomCrop(instance_sz - 2 * 8),
+            torchvision.transforms.ToPILImage(),
+#            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.RandomRotation(90),
+            torchvision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            torchvision.transforms.ToTensor()
+            ])
+    def __call__(self,z,x):
+        #z = self.transforms_z(z)
+        x = [np.array(self.transforms_x(i))for i in x]
+        #x = np.array(self.transforms_x(np.array(x)))
+        return z,x
+    
+
 
 class SiamFCTransforms(object):
 
@@ -120,7 +151,12 @@ class SiamFCTransforms(object):
 
 
     
-    def __call__(self, z, x, box_z, box_x, qz=None, qx=None, box_qz=None, box_qx=None):
+    def __call__(self, z, x, box_z=None, box_x=None, qz=None, qx=None, box_qz=None, box_qx=None, phase="None"):
+        if phase == "inference":
+            z=self.trprint("infer_trans")
+            z = self.transforms_z(z)
+            x = self.transforms_x(x)
+            return z,x
         z = self._crop(z, box_z, self.instance_sz)
         x = self._crop(x, box_x, self.instance_sz)
         z = self.transforms_z(z)
@@ -132,6 +168,12 @@ class SiamFCTransforms(object):
             qx = self.transforms_x(qx)
             return z, x, qz, qx, box_z, box_x, box_qz, box_qx
         return z, x, box_z, box_x
+    
+    def inference_transform(self,z,x):
+        print("infer_trans")
+        z = self.transforms_z(z)
+        x = self.transforms_x(x)
+        return z, x
     
     def _crop(self, img, box, out_size):
         # convert box to 0-indexed and center based [y, x, h, w]
