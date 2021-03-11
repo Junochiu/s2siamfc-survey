@@ -32,6 +32,7 @@ from utils.lr_helper import build_lr_scheduler
 from utils.img_loader import cv2_RGB_loader
 from got10k.trackers import Tracker
 from utils.average_meter_helper import AverageMeter
+from torchsummary import summary
 
 __all__ = ['TrackerSiamFC']
 
@@ -115,6 +116,9 @@ class TrackerSiamFC(Tracker):
 
             self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
+        summary(self.net,[(3,127,127),(3,255,255)])
+        self.set_learning_layers(1)
+        summary(self.net,[(3,127,127),(3,255,255)])
 
         # setup criterion
         self.criterion = AC_BalancedLoss(pos_thres=loss_setting[0], alpha=loss_setting[1], margin=loss_setting[2])
@@ -217,7 +221,18 @@ class TrackerSiamFC(Tracker):
             if key in cfg:
                 cfg.update({key: val})
         return namedtuple('Config', cfg.keys())(**cfg)
-    
+   
+
+    def set_learning_layers(self,layer):
+        layer = range(0,5-layer+1)
+        print(layer)
+        for n,p in self.net.named_parameters():
+            for l in layer:
+                if "backbone.conv"+str(l) in n:
+                    p.requires_grad = False
+        
+
+
     @torch.no_grad()
     def init(self, img, box):
         # set to evaluation mode
@@ -655,8 +670,7 @@ class TrackerSiamFC(Tracker):
 
         
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked *masked_2_loss
-
-        
+            
         return loss_siam, responses
     
     @torch.enable_grad()
