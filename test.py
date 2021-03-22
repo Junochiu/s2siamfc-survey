@@ -78,7 +78,7 @@ VOT16_exp.run(tracker, visualize=False)
 # testing pretrain with initial update
 # =============================================================================
 net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
-tracker = TrackerSiamFC(net_path=net_path, name='41_finetuned_OT')
+tracker = TrackerSiamFC(net_path=net_path, name='41_finetuned0405_OT')
 root_dir = '../dataset/VOT2018'
 VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
 VOT_exp.run(tracker, visualize=False)

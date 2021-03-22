@@ -117,7 +117,7 @@ class TrackerSiamFC(Tracker):
             self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
         summary(self.net,[(3,127,127),(3,255,255)])
-        self.set_learning_layers(1)
+        self.set_learning_layers(2)
         summary(self.net,[(3,127,127),(3,255,255)])
 
         # setup criterion
@@ -211,7 +211,7 @@ class TrackerSiamFC(Tracker):
             'momentum': 0.9,
             'r_pos': 16,
             'r_neg': 0,
-            'neg' : 0,
+            'neg' : 0.2,
             # loss weighting
             'no_mask' : 0.7,
             'masked' : 0.15,
