@@ -116,9 +116,20 @@ class TrackerSiamFC(Tracker):
 
             self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
-        summary(self.net,[(3,127,127),(3,255,255)])
-        self.set_learning_layers(2)
-        summary(self.net,[(3,127,127),(3,255,255)])
+        
+        # setting learning rate
+        ################################################################
+        #self.cfg.initial_lr = self.cfg.initial_lr*0.5
+        #self.cfg.ultimate_lr = self.cfg.ultimate_lr*0.5
+        ################################################################
+
+
+        # setting learning layers
+        ################################################################
+        #summary(self.net,[(3,127,127),(3,255,255)])
+        self.set_learning_layers(1)
+        #summary(self.net,[(3,127,127),(3,255,255)])
+        ################################################################
 
         # setup criterion
         self.criterion = AC_BalancedLoss(pos_thres=loss_setting[0], alpha=loss_setting[1], margin=loss_setting[2])
@@ -205,9 +216,9 @@ class TrackerSiamFC(Tracker):
             'epoch_num': 50,
             'batch_size': 8,
             'num_workers': 3,
-            'initial_lr': 1e-2,
-            'ultimate_lr': 1e-5,
-            'weight_decay': 5e-4,
+            'initial_lr': 1e-2*0.05,
+            'ultimate_lr': 1e-5*0.05,
+            'weight_decay': 5e-4*0.05,
             'momentum': 0.9,
             'r_pos': 16,
             'r_neg': 0,
@@ -346,28 +357,28 @@ class TrackerSiamFC(Tracker):
             self.device).permute(2, 0, 1).unsqueeze(0).float()
 
         # search images without transform
-        x = [ops.crop_and_resize(
-            img, self.center, self.x_sz * f,
-            out_size=self.cfg.instance_sz,
-            border_value=self.avg_color) for f in self.scale_factors]
-        x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
-        x = np.stack(x, axis=0)
-        x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
-
-
-        # search image with Transform
-        # =============================================================================
-        #transforms = inferenceTransforms(
-        #    exemplar_sz=self.cfg.exemplar_sz,
-        #    instance_sz=self.cfg.instance_sz,
-        #    context=self.cfg.context)
-        #
-        # three different transforms in X
         #x = [ops.crop_and_resize(
         #    img, self.center, self.x_sz * f,
         #    out_size=self.cfg.instance_sz,
         #    border_value=self.avg_color) for f in self.scale_factors]
-        #z,x = transforms(z,x)
+        #x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
+        #x = np.stack(x, axis=0)
+        #x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
+
+
+        # search image with Transform
+        # =============================================================================
+        transforms = inferenceTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        
+        # three different transforms in X
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz * f,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color) for f in self.scale_factors]
+        z,x = transforms(z,x)
         #
         # three same transforms in X
         #x = [ops.crop_and_resize(
@@ -378,10 +389,10 @@ class TrackerSiamFC(Tracker):
         #x.append(x[0])
         #x.append(x[0])
         #
-        #x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
-        #x = np.stack(x, axis=0)
+        x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
+        x = np.stack(x, axis=0)
         ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
-        #x = torch.from_numpy(x).to(self.device).float()
+        x = torch.from_numpy(x).to(self.device).float()
         # =============================================================================
         
         random.seed()
