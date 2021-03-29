@@ -22,6 +22,7 @@ from torch.autograd import Variable
 from six import string_types
 from PIL import Image
 
+from datasets.vid import ImageNetVID
 from . import ops
 from .backbones import AlexNet, Resnet18, Inception, VGG16
 from .heads import SiamFC, SiamFC_1x1_DW
@@ -218,7 +219,7 @@ class TrackerSiamFC(Tracker):
             'num_workers': 3,
             'initial_lr': 1e-2*0.05,
             'ultimate_lr': 1e-5*0.05,
-            'weight_decay': 5e-4*0.05,
+            'weight_decay': 5e-4,
             'momentum': 0.9,
             'r_pos': 16,
             'r_neg': 0,
@@ -306,7 +307,7 @@ class TrackerSiamFC(Tracker):
         
         self.kernel = self.net.backbone(z)
 
-    def maml_init(self, img, box):
+    def maml_init(self, img, box, frame_id):
         # convert box to 0-indexed and center based [y, x, h, w]
         box = np.array([
             box[1] - 1 + (box[3] - 1) / 2,
@@ -374,12 +375,12 @@ class TrackerSiamFC(Tracker):
             context=self.cfg.context)
         
         # three different transforms in X
-        x = [ops.crop_and_resize(
-            img, self.center, self.x_sz * f,
-            out_size=self.cfg.instance_sz,
-            border_value=self.avg_color) for f in self.scale_factors]
-        z,x = transforms(z,x)
-        #
+        #x = [ops.crop_and_resize(
+        #    img, self.center, self.x_sz * f,
+        #    out_size=self.cfg.instance_sz,
+        #    border_value=self.avg_color) for f in self.scale_factors]
+        #z,x = transforms(z,x)
+        
         # three same transforms in X
         #x = [ops.crop_and_resize(
         #    img, self.center, self.x_sz,
@@ -388,23 +389,31 @@ class TrackerSiamFC(Tracker):
         #z,x = transforms(z,x)
         #x.append(x[0])
         #x.append(x[0])
-        #
+        
+        # one transform only
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color)]
+        z,x = transforms(z,x)
+
         x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
         x = np.stack(x, axis=0)
         ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
         x = torch.from_numpy(x).to(self.device).float()
         # =============================================================================
         
+
+        self.batch = self.make_up_batch([z,x],frame_id)
+
         random.seed()
         rdn = random.randint(0,100)
-        torchvision.utils.save_image(z, './z_{}.png'.format(rdn))
-        torchvision.utils.save_image(x, './x_{}.png'.format(rdn))
+        torchvision.utils.save_image(self.batch[0], './z_{}.png'.format(rdn))
+        torchvision.utils.save_image(self.batch[1], './x_{}.png'.format(rdn))
  
 
         inference_update = 3
         for idx in range(inference_update):
-            #ipdb.set_trace()
-            #x_prown,z_prown = self.get_random_pair(img,transforms)
             loss,_ = self.train_step([z,x,[0]])
             self.optimizer.zero_grad()
             loss.backward()
@@ -416,6 +425,40 @@ class TrackerSiamFC(Tracker):
         # set to evaluation mode
         self.net.eval()
         self.kernel = self.net.backbone(z)
+
+    def make_up_batch(self,vot_zx,frame_id):
+        # set up
+        neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
+        root_dir = '../dataset/ILSVRC2015'      #Dataset path
+        seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
+        # set up transforms
+        transforms = SiamFCTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        dataset = Pair(
+            seqs=seqs,
+            transforms=transforms, supervised='self-supervised', img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+
+        # setup dataloader
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.batch_size,
+            shuffle=True,
+            num_workers=self.cfg.num_workers,
+            pin_memory=self.cuda,
+            drop_last=True)
+        
+        if frame_id != 0:
+            self.batch[0][self.cur_rdn] = vot_zx[0]
+            self.batch[1][self.cur_rdn] = vot_zx[1]
+        else:
+            self.batch = next(iter(dataloader))
+            random.seed()
+            self.cur_rdn = random.randint(0,7)
+            self.batch[0][self.cur_rdn] = vot_zx[0]
+            self.batch[1][self.cur_rdn] = vot_zx[1]
+        return self.batch
 
     def get_random_pair(self, img, transforms):
 

@@ -216,7 +216,7 @@ class ExperimentVOT(object):
                         # initial tracker frame
                         tracker.reload()
                         # initial frame
-                        tracker.maml_init(frame, anno_rects[0])
+                        tracker.maml_init(frame, anno_rects[0],f)
                         # tracker.init(frame, anno_rects[0])
                         boxes.append([1])
                         # need to update the tracker here
@@ -224,7 +224,7 @@ class ExperimentVOT(object):
                         # during failure frames
                         if f == next_start:
                             failure = False
-                            tracker.maml_init(frame, anno_rects[f])
+                            tracker.maml_init(frame, anno_rects[f],f)
                             #tracker.init(frame, anno_rects[f])
                             boxes.append([1])
                         else:

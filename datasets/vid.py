@@ -76,13 +76,13 @@ class ImageNetVID(object):
 
     def _cache_meta(self):
         cache_file = os.path.join(self.cache_dir, 'seq_dict.json')
-        '''
+        
         if os.path.isfile(cache_file):
             print('Dataset already cached.')
             with open(cache_file) as f:
                 seq_dict = json.load(f, object_pairs_hook=OrderedDict)
             return seq_dict
-        '''
+    
         if self.neg_dir:
             neg_dict = json.load(open(self.neg_dir), object_pairs_hook=OrderedDict)
         # image and annotation paths
@@ -122,7 +122,6 @@ class ImageNetVID(object):
                 frames_num = len(glob.glob(seq_dirs[s] + '/*'))
                 # store paths
                 seq_dict.update([(key, [seq_dirs[s], list(map(int, np.arange(frames_num)))])])
-        ipdb.set_trace()
 
         # store seq_dict
         #ipdb.set_trace()
