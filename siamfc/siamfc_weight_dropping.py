@@ -18,6 +18,7 @@ from collections import namedtuple
 from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.data import DataLoader
 import torchvision
+from torchvision.transforms import ToTensor
 from torch.autograd import Variable
 from six import string_types
 from PIL import Image
@@ -28,7 +29,7 @@ from .backbones import AlexNet, Resnet18, Inception, VGG16
 from .heads import SiamFC, SiamFC_1x1_DW
 from .losses import AC_BalancedLoss, BalancedLoss, RankLoss
 from .datasets import Pair
-from .transforms import SiamFCTransforms,inferenceTransforms
+from .transforms import SiamFCTransforms,inferenceTransforms,SiamFCTransforms_testphase
 from utils.lr_helper import build_lr_scheduler
 from utils.img_loader import cv2_RGB_loader
 from got10k.trackers import Tracker
@@ -128,7 +129,7 @@ class TrackerSiamFC(Tracker):
         # setting learning layers
         ################################################################
         #summary(self.net,[(3,127,127),(3,255,255)])
-        self.set_learning_layers(1)
+        #self.set_learning_layers(1)
         #summary(self.net,[(3,127,127),(3,255,255)])
         ################################################################
 
@@ -374,6 +375,8 @@ class TrackerSiamFC(Tracker):
             instance_sz=self.cfg.instance_sz,
             context=self.cfg.context)
         
+        #items = self.get_random_pair(img,transforms)
+
         # three different transforms in X
         #x = [ops.crop_and_resize(
         #    img, self.center, self.x_sz * f,
@@ -432,7 +435,7 @@ class TrackerSiamFC(Tracker):
         root_dir = '../dataset/ILSVRC2015'      #Dataset path
         seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
         # set up transforms
-        transforms = SiamFCTransforms(
+        transforms = SiamFCTransforms_testphase(
             exemplar_sz=self.cfg.exemplar_sz,
             instance_sz=self.cfg.instance_sz,
             context=self.cfg.context)
@@ -448,7 +451,7 @@ class TrackerSiamFC(Tracker):
             num_workers=self.cfg.num_workers,
             pin_memory=self.cuda,
             drop_last=True)
-        
+
         if frame_id != 0:
             self.batch[0][self.cur_rdn] = vot_zx[0]
             self.batch[1][self.cur_rdn] = vot_zx[1]
@@ -460,11 +463,13 @@ class TrackerSiamFC(Tracker):
             self.batch[1][self.cur_rdn] = vot_zx[1]
         return self.batch
 
-    def get_random_pair(self, img, transforms):
+    def get_random_pair(self, img, transforms=None):
 
         #z = cv2_RGB_loader(img)  # get RGB img
-        z = img
-        img_h, img_w, = self.z_sz, self.z_sz
+        #z = ToTensor()(img)
+        z = np.asarray(img)
+        #img_h, img_w, = self.z_sz, self.z_sz
+        img_h, img_w, _ = z.shape
 
         target_sz = [img_w // np.random.randint(4, 9), img_h // np.random.randint(4, 9)]
         target_pos = [np.random.randint(target_sz[0], (img_w - target_sz[0])),
