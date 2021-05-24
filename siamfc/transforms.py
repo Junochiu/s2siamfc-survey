@@ -93,28 +93,26 @@ class RandomCrop(object):
 #        return torch.from_numpy(img).float().permute((2, 0, 1))
 
 class inferenceTransforms(object):
-    def __init__(self,exemplar_sz=127, instance_sz=255, context=0.5):        
+    def __init__(self,max_stretch=0.05,random_rotate=10,exemplar_sz=127, instance_sz=255, context=0.5):        
         self.context = context
         self.instance_sz = instance_sz
         self.exemplar_sz = exemplar_sz
         self.transforms_z = Compose([
-            RandomStretch(),
-            CenterCrop(instance_sz - 8),
-            RandomCrop(instance_sz - 2 * 8),
+            RandomStretch(max_stretch),
             CenterCrop(exemplar_sz),
             torchvision.transforms.ToPILImage(),
 #            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.RandomRotation(30),
+            torchvision.transforms.RandomRotation(10),
             torchvision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             torchvision.transforms.ToTensor()
             ])
         self.transforms_x = Compose([
-            RandomStretch(),
+            RandomStretch(max_stretch),
             CenterCrop(instance_sz - 8),
             RandomCrop(instance_sz - 2 * 8),
             torchvision.transforms.ToPILImage(),
 #            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.RandomRotation(30),
+            torchvision.transforms.RandomRotation(random_rotate),
             torchvision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             torchvision.transforms.ToTensor()
             ])
@@ -239,27 +237,27 @@ class SiamFCTransforms(object):
 
 class SiamFCTransforms_testphase(object):
 
-    def __init__(self, exemplar_sz=127, instance_sz=255, context=0.5):
+    def __init__(self, max_stretch=0.05,random_rotate=10, exemplar_sz=127, instance_sz=255, context=0.5):
         self.exemplar_sz = exemplar_sz
         self.instance_sz = instance_sz
         self.context = context
         self.transforms_z = Compose([
-            RandomStretch(),
+            RandomStretch(max_stretch),
             CenterCrop(instance_sz - 8),
             RandomCrop(instance_sz - 2 * 8),
             CenterCrop(exemplar_sz),
             torchvision.transforms.ToPILImage(),
 #            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.RandomRotation(30),
+            torchvision.transforms.RandomRotation(random_rotate),
             torchvision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             torchvision.transforms.ToTensor()])
         self.transforms_x = Compose([
-            RandomStretch(),
+            RandomStretch(max_stretch),
             CenterCrop(instance_sz - 8),
             RandomCrop(instance_sz - 2 * 8),
             torchvision.transforms.ToPILImage(),
 #            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.RandomRotation(30),
+            torchvision.transforms.RandomRotation(random_rotate),
             torchvision.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             torchvision.transforms.ToTensor()])
 

@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import ipdb
 import os
+import argparse
 from got10k.experiments import *
 
 from siamfc.maml_backbones import AlexNet
@@ -75,10 +76,19 @@ VOT16_exp.run(tracker, visualize=False)
 #    VOT_exp.run(tracker, visualize=False)
 # =============================================================================
 
+# parsing parameter
+parser = argparse.ArgumentParser()
+parser.add_argument("--test_name")
+parser.add_argument("--testing_frame",type=int)
+parser.add_argument("--update_times",type=int)
+arg = parser.parse_args()
+
+
+
 # testing pretrain with initial update
 # =============================================================================
 net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
-tracker = TrackerSiamFC(net_path=net_path, name='debug_lr0.05_WT30d')
+tracker = TrackerSiamFC(net_path=net_path, name=arg.test_name, testing_param=arg)
 root_dir = '../dataset/VOT2018'
 VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
 VOT_exp.run(tracker, visualize=False)

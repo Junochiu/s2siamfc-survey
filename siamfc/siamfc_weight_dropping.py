@@ -61,11 +61,12 @@ class Net(nn.Module):
 
 class TrackerSiamFC(Tracker):
 
-    def __init__(self, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0],**kwargs):
+    def __init__(self, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0],testing_param=None, **kwargs):
         super(TrackerSiamFC, self).__init__(name, True)
         self.cfg = self.parse_args(**kwargs)
         self.net_path = net_path
-
+        if testing_param is not None:
+            self.tparam = testing_param
         # setup GPU device if available
         self.cuda = torch.cuda.is_available()
         self.device = torch.device('cuda:0' if self.cuda else 'cpu')
@@ -151,7 +152,7 @@ class TrackerSiamFC(Tracker):
             1.0 / self.cfg.epoch_num)
         self.lr_scheduler = ExponentialLR(self.optimizer, gamma)
 #        self.lr_scheduler = build_lr_scheduler(self.optimizer, True, self.cfg.initial_lr, self.cfg.ultimate_lr, self.cfg.epoch_num)
-
+        self.count = -1
     def reload(self):
         print("--------reload model--------")
         state_dict = torch.load(self.net_path, map_location=lambda storage, loc: storage)
@@ -194,7 +195,13 @@ class TrackerSiamFC(Tracker):
 
         self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
-
+        self.count = self.count+1
+        self.tr_type=[[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],
+                [0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.5,10],[0.05,10],[0.5,10],[0.05,10],
+                [0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.5,10],[0.05,10],[0.05,10],
+                [0.5,10],[0.5,10],[0.5,10],[0.5,10],[0.05,10],[0.05,10],[0.05,10],[0.5,10],[0.5,10],[0.5,10],
+                [0.05,10],[0.5,10],[0.5,10],[0.05,10],[0.05,10],[0.05,10],[0.05,10],[0.5,10],[0.15,10],[0.05,10],
+                [0.05,10],[0.5,10],[0.5,10],[0.05,10],[0.05,10],[0.05,10],[0.5,10],[0.05,10],[0.05,10],[0.05,10]]
 
     def parse_args(self, **kwargs):
         # default parameters
@@ -215,7 +222,7 @@ class TrackerSiamFC(Tracker):
             'response_up': 16,
             'total_stride': 8,
             # train parameters
-            'epoch_num': 50,
+            'epoch_num': 3,
             'batch_size': 8,
             'num_workers': 3,
             'initial_lr': 1e-2*0.05,
@@ -358,6 +365,20 @@ class TrackerSiamFC(Tracker):
         z = torch.from_numpy(z).to(
             self.device).permute(2, 0, 1).unsqueeze(0).float()
 
+
+        # z-kernel
+        self.avg_color = np.mean(img, axis=(0, 1))
+        z_kernel = ops.crop_and_resize(
+            img, self.center, self.z_sz,
+            out_size=self.cfg.exemplar_sz,
+            border_value=self.avg_color)  # return cv2
+
+        z_kernel = cv2.normalize(z_kernel, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        # exemplar features
+        z_kernel = torch.from_numpy(z_kernel).to(
+            self.device).permute(2, 0, 1).unsqueeze(0).float()
+
         # search images without transform
         #x = [ops.crop_and_resize(
         #    img, self.center, self.x_sz * f,
@@ -367,7 +388,7 @@ class TrackerSiamFC(Tracker):
         #x = np.stack(x, axis=0)
         #x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
 
-
+        '''
         # search image with Transform
         # =============================================================================
         transforms = inferenceTransforms(
@@ -414,20 +435,138 @@ class TrackerSiamFC(Tracker):
         torchvision.utils.save_image(self.batch[0], './z_{}.png'.format(rdn))
         torchvision.utils.save_image(self.batch[1], './x_{}.png'.format(rdn))
  
+        '''
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color)]
+        #self.batch = self.make_up_transform_batch(z,x,self.tr_type[self.count])
+        self.batch = self.make_up_transform_batch_with_training(z,x,self.tr_type[self.count],frame_id)
+        #self.optimizer = optim.SGD(self.net.parameters(),lr=self.cfg.initial_lr,weight_decay=self.cfg.weight_decay,momentum=self.cfg.momentum)
 
-        inference_update = 3
+        # setup lr scheduler
+        #gamma = np.power(self.cfg.ultimate_lr / self.cfg.initial_lr,1.0 / self.cfg.epoch_num)
+        #self.lr_scheduler = ExponentialLR(self.optimizer, gamma)
+        
+        
+        inference_update = self.tparam.update_times
         for idx in range(inference_update):
-            loss,_ = self.train_step([z,x,[0]])
+            lr = self.lr_scheduler.get_last_lr()
+            lr1 = self.optimizer.param_groups[0]['lr']
+            print(idx,lr,lr1)
+
+            z_update = self.batch[0].to(self.device)
+            x_update = self.batch[1].to(self.device)
+            loss,_ = self.train_step([z_update,x_update,[0]])
             self.optimizer.zero_grad()
             loss.backward()
-            print("loss update in init = {}".format(loss))
+            #print("loss update in init = {}".format(loss))
             self.optimizer.step()
+            self.lr_scheduler.step(epoch=idx)
         # =============================================================================
         #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
         # =============================================================================
         # set to evaluation mode
         self.net.eval()
-        self.kernel = self.net.backbone(z)
+        self.kernel = self.net.backbone(z_kernel)
+
+
+    def make_up_transform_batch(self,z,x,transform_type):
+        transforms = inferenceTransforms(
+            max_stretch=transform_type[0],
+            random_rotate=transform_type[1],
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        self.batch_z = []
+        self.batch_x = []
+        for i in range(8):
+            print("transform_type[0]",transform_type[0])
+            transforms = inferenceTransforms(
+            max_stretch=transform_type[0],
+            random_rotate=transform_type[1],
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+            
+            tr_z,tr_x = transforms(z,x)
+
+            tr_x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in tr_x]
+            tr_x = np.stack(tr_x, axis=0)
+            ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
+            tr_x = torch.from_numpy(tr_x).to(self.device).float()
+            self.batch_z.append(tr_z.squeeze(0))
+            self.batch_x.append(tr_x.squeeze(0))
+        # =============================================================================
+        self.batch_z = torch.stack(self.batch_z)
+        self.batch_x = torch.stack(self.batch_x) 
+        self.batch=[self.batch_z,self.batch_x]
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(self.batch_z, './z_{}.png'.format(0))
+        torchvision.utils.save_image(self.batch_x, './x_{}.png'.format(0))
+        return self.batch
+    
+    def make_up_transform_batch_with_training(self,z,x,transform_type,frame_id):
+        # set up
+        neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
+        root_dir = '../dataset/ILSVRC2015'      #Dataset path
+        seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
+        # set up transforms
+        transforms_train = SiamFCTransforms_testphase(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        dataset = Pair(
+            seqs=seqs,
+            transforms=transforms_train, supervised='self-supervised', img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+
+        # setup dataloader
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.batch_size,
+            shuffle=True,
+            num_workers=self.cfg.num_workers,
+            pin_memory=self.cuda,
+            drop_last=True)
+        
+        transforms = inferenceTransforms(
+            max_stretch=0.15,
+            random_rotate=transform_type[1],
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        
+        if frame_id == 0:
+            self.batch = next(iter(dataloader))
+        
+        for i in range(self.tparam.update_times):
+            tr_z,tr_x = transforms(z,x)
+            tr_x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in tr_x]
+            tr_x = np.stack(tr_x, axis=0)
+            ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
+            tr_x = torch.from_numpy(tr_x).to(self.device).float()
+            '''
+            if frame_id != 0:
+                self.batch[0][self.cur_rdn] = tr_z
+                self.batch[1][self.cur_rdn] = tr_x
+            else:
+                self.batch = next(iter(dataloader))
+                random.seed()
+                #self.cur_rdn = random.randint(0,7)
+            '''
+            self.cur_rdn = i
+            self.batch[0][self.cur_rdn] = tr_z
+            self.batch[1][self.cur_rdn] = tr_x
+
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(self.batch[0], './z_{}.png'.format(rdn))
+        torchvision.utils.save_image(self.batch[1], './x_{}.png'.format(rdn))
+
+        return self.batch
+
+
 
     def make_up_batch(self,vot_zx,frame_id):
         # set up
