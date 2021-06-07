@@ -24,17 +24,27 @@ class Pair(Dataset):
         self.rangeup = 10
         self.neg = neg
         self.gen_query = gen_query
+        '''
         if self.neg:
             self.cluster_dict = json.load(open('./cluster_dict.json'), object_pairs_hook=OrderedDict)
+        '''
+        self.cluster_dict = json.load(open('./cluster_dict.json'), object_pairs_hook=OrderedDict)
 
     def __getitem__(self, index):
         index = self.indices[index % len(self.indices)]
-
+        ''' original code for ISLVRC 2015
         if self.neg:
             img_files, seq_name, cluster_id = self.seqs[index] #[:2]
         else:
             img_files, seq_name = self.seqs[index] 
-
+        '''
+        
+        if len(self.seqs[index])>2:
+            img_files, seq_name, cluster_id = self.seqs[index] #[:2]
+            self.neg = 0
+        else:
+            img_files, seq_name = self.seqs[index]
+            self.neg = 0
 
         if self.supervised == 'self-supervised':
             neg = self.neg and self.neg > np.random.rand()
@@ -93,9 +103,14 @@ class Pair(Dataset):
                 target_sz_x = [imgx_w//np.random.randint(4, 9), imgx_h//np.random.randint(4, 9)]
                 target_pos_x = [np.random.randint(target_sz_x[0], (imgx_w-target_sz_x[0])), np.random.randint(target_sz_x[1], (imgx_h-target_sz_x[1]))]
 
+                ### for training
                 box_z = self._cxy_wh_2_bbox(target_pos_z, target_sz_z)
                 box_x = self._cxy_wh_2_bbox(target_pos_x, target_sz_x)
-
+                
+                ### for testing
+                #box_z = [target_pos_z[0],target_pos_z[1],target_sz_z[0],target_sz_z[1]]
+                #box_x = [target_pos_x[0],target_pos_x[1],target_sz_x[0],target_sz_x[1]]
+                
 
 ######### create query set #########
                 if self.gen_query:
@@ -148,9 +163,14 @@ class Pair(Dataset):
 
                 target_sz = [img_w//np.random.randint(4, 9), img_h//np.random.randint(4, 9)]
                 target_pos = [np.random.randint(target_sz[0], (img_w-target_sz[0])), np.random.randint(target_sz[1], (img_h-target_sz[1]))]
-
+                
+                ### training phase
                 box = self._cxy_wh_2_bbox(target_pos, target_sz)
                 
+
+                ### for testing
+                #box = [target_pos[0],target_pos[1],target_sz[0],target_sz[1]]
+
 ######### create query set #########
                 if self.gen_query:
                     random_fid_query = np.random.choice(len(img_files))

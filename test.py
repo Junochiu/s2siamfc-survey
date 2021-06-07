@@ -76,22 +76,33 @@ VOT16_exp.run(tracker, visualize=False)
 #    VOT_exp.run(tracker, visualize=False)
 # =============================================================================
 
+
+for idx in range(22, 51):
+    net_path = './checkpoints/codecleaning2/siamfc_alexnet_e{}.pth'.format(idx)
+    tracker = TrackerSiamFC(net_path=net_path, name='codecleaning_e{}'.format(idx))
+    root_dir = '../dataset/VOT2018'
+    VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='supervised', read_image=False)
+    VOT_exp.run(tracker, visualize=False)
+
+
 # parsing parameter
-parser = argparse.ArgumentParser()
-parser.add_argument("--test_name")
-parser.add_argument("--testing_frame",type=int)
-parser.add_argument("--update_times",type=int)
-arg = parser.parse_args()
-
-
+# =============================================================================
+#parser = argparse.ArgumentParser()
+#parser.add_argument("--test_name")
+#parser.add_argument("--testing_frame",type=int)
+#parser.add_argument("--update_times",type=int)
+#parser.add_argument("--rdncropped_times",type=int)
+#parser.add_argument("--crop",type=int)
+#arg = parser.parse_args()
+# =============================================================================
 
 # testing pretrain with initial update
 # =============================================================================
-net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
-tracker = TrackerSiamFC(net_path=net_path, name=arg.test_name, testing_param=arg)
-root_dir = '../dataset/VOT2018'
-VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
-VOT_exp.run(tracker, visualize=False)
+#net_path = './pretrain/eccv_best/siamfc_alexnet_e41.pth'
+#tracker = TrackerSiamFC(net_path=net_path, name=arg.test_name, testing_param=arg)
+#root_dir = '../dataset/VOT2018'
+#VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='maml', read_image=False)
+#VOT_exp.run(tracker, visualize=False)
 # =============================================================================
 
 # testing maml trained model
@@ -112,4 +123,4 @@ OTB_exp.report([tracker.name])
 #    root_dir = 'D:/UDT_pytorch/track/dataset/OTB2013'
 #    OTB_exp = ExperimentOTB(root_dir, version=2013)
 #    OTB_exp.run(tracker, visualize=False)
-#    OTB_exp.report([tracker.name])
+#    OTB_exp.report([trackr.name])
