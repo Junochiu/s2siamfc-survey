@@ -1,4 +1,4 @@
-# S2siamfc - finetuning survey
+# S2Siamfc - finetuning survey
 This repo contain the original code of S2siamfc, and modified versions with several different implementations.
 ## Installation
 
