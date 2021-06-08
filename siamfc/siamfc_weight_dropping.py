@@ -223,7 +223,7 @@ class TrackerSiamFC(Tracker):
             'momentum': 0.9,
             'r_pos': 16,
             'r_neg': 0,
-            'neg' : 0, #if use ILSVRC2015, set neg to 0.2
+            'neg' : 0.2, #if use ILSVRC2015, set neg to 0.2
             # loss weighting
             'no_mask' : 0.7,
             'masked' : 0.15,

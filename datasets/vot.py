@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Jun 26 22:58:34 2020
-
-@author: Alan
-"""
-
 from __future__ import absolute_import, print_function
 import ipdb
 import os
