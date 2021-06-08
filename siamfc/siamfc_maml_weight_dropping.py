@@ -517,15 +517,18 @@ class TrackerSiamFC(Tracker):
 
         z_masked_1 = get_adv_mask_img(z, feat_z, grad_z)
         z_masked_2 = get_adv_mask_img(z, feat_z, grad_z)
+        
+        # if would like to set query set into the masked result of support set
+        # =============================================================================
         #if phase == 'support':
-            #query_set = get_adv_mask_img(z, feat_z, grad_z)
-            #torchvision.utils.save_image(query_set, './query_set.png')
-        #ipdb.set_trace()
-
-        # torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
+        #    query_set = get_adv_mask_img(z, feat_z, grad_z)
+        #    torchvision.utils.save_image(query_set, './query_set.png')
+        #
+        #torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
         #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
         #torchvision.utils.save_image(z_masked_2, './test_z_masked_2.png')
-
+        # =============================================================================
+        
         responses_masked_1 = self.net.forward(z_masked_1, x, num_step=num_step, params=names_weight_copy)
         responses_masked_2 = self.net.forward(z_masked_2, x, num_step=num_step, params=names_weight_copy)
 
@@ -536,7 +539,7 @@ class TrackerSiamFC(Tracker):
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked * masked_2_loss
         if phase == 'support':
             return [q_z, q_x, neg], loss_siam, responses
-        elif phase == 'support oritemp':
+        elif phase == 'support oritemp': # if using masked result of support set as query set
             return [q_z, x, z, neg], loss_siam, responses
 
         return loss_siam, responses

@@ -214,18 +214,34 @@ class ExperimentVOT(object):
                     start_time = time.time()
                     if f == 0:
                         # initial tracker frame
-                        tracker.reload()
-                        # initial frame
-                        tracker.maml_init(frame, anno_rects[0])
-                        # tracker.init(frame, anno_rects[0])
+
+                        # use maml_init for model update with first frame
+                        # =============================================================================
+                        # tracker.reload()
+                        # tracker.maml_init(frame, anno_rects[0],f)
+                        # =============================================================================
+
+                        # for original testing 
+                        # =============================================================================
+                        tracker.init(frame, anno_rects[0])
+                        # =============================================================================
                         boxes.append([1])
-                        # need to update the tracker here
+
                     elif failure:
                         # during failure frames
                         if f == next_start:
                             failure = False
-                            tracker.maml_init(frame, anno_rects[f])
-                            #tracker.init(frame, anno_rects[f])
+                            
+                            # use maml_init for model update with first frame
+                            # =============================================================================
+                            # tracker.maml_init(frame, anno_rects[f],f)
+                            # use maml_init for model update with first frame
+                            # =============================================================================
+                        
+                            # for original testing 
+                            # =============================================================================
+                            tracker.init(frame, anno_rects[f])
+                            # =============================================================================
                             boxes.append([1])
                         else:
                             start_time = np.NaN

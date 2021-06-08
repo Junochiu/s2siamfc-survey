@@ -18,20 +18,23 @@ from collections import namedtuple
 from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.data import DataLoader
 import torchvision
+from torchvision.transforms import ToTensor
 from torch.autograd import Variable
 from six import string_types
 from PIL import Image
 
+from datasets.vid import ImageNetVID
 from . import ops
 from .backbones import AlexNet, Resnet18, Inception, VGG16
 from .heads import SiamFC, SiamFC_1x1_DW
 from .losses import AC_BalancedLoss, BalancedLoss, RankLoss
 from .datasets import Pair
-from .transforms import SiamFCTransforms,inferenceTransforms
+from .transforms import SiamFCTransforms,inferenceTransforms,SiamFCTransforms_testphase
 from utils.lr_helper import build_lr_scheduler
 from utils.img_loader import cv2_RGB_loader
 from got10k.trackers import Tracker
 from utils.average_meter_helper import AverageMeter
+from torchsummary import summary
 
 __all__ = ['TrackerSiamFC']
 
@@ -58,11 +61,12 @@ class Net(nn.Module):
 
 class TrackerSiamFC(Tracker):
 
-    def __init__(self, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0],**kwargs):
+    def __init__(self, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0],testing_param=None, **kwargs):
         super(TrackerSiamFC, self).__init__(name, True)
         self.cfg = self.parse_args(**kwargs)
         self.net_path = net_path
-
+        if testing_param is not None:
+            self.tparam = testing_param
         # setup GPU device if available
         self.cuda = torch.cuda.is_available()
         self.device = torch.device('cuda:0' if self.cuda else 'cpu')
@@ -75,25 +79,24 @@ class TrackerSiamFC(Tracker):
         
         # load checkpoint if provided
         if net_path is not None:
-            state_dict = torch.load(net_path, map_location=lambda storage, loc: storage)
-            
+            state_dict = torch.load(net_path, map_location=lambda storage, loc: storage) 
             # loading s2siamfc pretrain
             ################################################################
-            tmp_model = state_dict.copy()
-            oldkey = []
-            for key in tmp_model.keys():
-                key_split = key.split(".")
-                if key_split[0] != 'head':
-                    if key_split[2] == '0':
-                        key_split[2] = "conv"
-                    elif key_split[2] == '1':
-                        key_split[2] = "bn"
-                    str = "."
-                    new_key = str.join(key_split)
-                    state_dict[new_key]=tmp_model[key]
-                    oldkey.append(key)
-            for key in oldkey:
-                del state_dict[key]
+            #tmp_model = state_dict.copy()
+            #oldkey = []
+            #for key in tmp_model.keys():
+            #    key_split = key.split(".")
+            #    if key_split[0] != 'head':
+            #        if key_split[2] == '0':
+            #            key_split[2] = "conv"
+            #        elif key_split[2] == '1':
+            #            key_split[2] = "bn"
+            #        str = "."
+            #        new_key = str.join(key_split)
+            #        state_dict[new_key]=tmp_model[key]
+            #        oldkey.append(key)
+            #for key in oldkey:
+            #    del state_dict[key]
             ################################################################
             
             # loading maml trained
@@ -115,6 +118,20 @@ class TrackerSiamFC(Tracker):
 
             self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
+        
+        # setting learning rate
+        ################################################################
+        #self.cfg.initial_lr = self.cfg.initial_lr*0.5
+        #self.cfg.ultimate_lr = self.cfg.ultimate_lr*0.5
+        ################################################################
+
+
+        # setting learning layers
+        ################################################################
+        #summary(self.net,[(3,127,127),(3,255,255)])
+        #self.set_learning_layers(1)
+        #summary(self.net,[(3,127,127),(3,255,255)])
+        ################################################################
 
         # setup criterion
         self.criterion = AC_BalancedLoss(pos_thres=loss_setting[0], alpha=loss_setting[1], margin=loss_setting[2])
@@ -134,28 +151,28 @@ class TrackerSiamFC(Tracker):
             1.0 / self.cfg.epoch_num)
         self.lr_scheduler = ExponentialLR(self.optimizer, gamma)
 #        self.lr_scheduler = build_lr_scheduler(self.optimizer, True, self.cfg.initial_lr, self.cfg.ultimate_lr, self.cfg.epoch_num)
-
+        self.count = -1
     def reload(self):
         print("--------reload model--------")
         state_dict = torch.load(self.net_path, map_location=lambda storage, loc: storage)
 
         # loading s2siamfc pretrain
         ################################################################
-        tmp_model = state_dict.copy()
-        oldkey = []
-        for key in tmp_model.keys():
-            key_split = key.split(".")
-            if key_split[0] != 'head':
-                if key_split[2] == '0':
-                    key_split[2] = "conv"
-                elif key_split[2] == '1':
-                    key_split[2] = "bn"
-                str = "."
-                new_key = str.join(key_split)
-                state_dict[new_key]=tmp_model[key]
-                oldkey.append(key)
-        for key in oldkey:
-            del state_dict[key]
+        #tmp_model = state_dict.copy()
+        #oldkey = []
+        #for key in tmp_model.keys():
+        #    key_split = key.split(".")
+        #    if key_split[0] != 'head':
+        #        if key_split[2] == '0':
+        #            key_split[2] = "conv"
+        #        elif key_split[2] == '1':
+        #            key_split[2] = "bn"
+        #        str = "."
+        #        new_key = str.join(key_split)
+        #        state_dict[new_key]=tmp_model[key]
+        #        oldkey.append(key)
+        #for key in oldkey:
+        #    del state_dict[key]
         ################################################################
 
         # loading maml trained
@@ -177,7 +194,6 @@ class TrackerSiamFC(Tracker):
 
         self.net.load_state_dict(state_dict)
         self.net = self.net.to(self.device)
-
 
     def parse_args(self, **kwargs):
         # default parameters
@@ -207,7 +223,7 @@ class TrackerSiamFC(Tracker):
             'momentum': 0.9,
             'r_pos': 16,
             'r_neg': 0,
-            'neg' : 0,
+            'neg' : 0.2, #if use ILSVRC2015, set neg to 0.2
             # loss weighting
             'no_mask' : 0.7,
             'masked' : 0.15,
@@ -217,7 +233,19 @@ class TrackerSiamFC(Tracker):
             if key in cfg:
                 cfg.update({key: val})
         return namedtuple('Config', cfg.keys())(**cfg)
+   
     
+    # use the function to set layers for update in finetune stage
+    def set_learning_layers(self,layer):
+        layer = range(0,5-layer+1)
+        print(layer)
+        for n,p in self.net.named_parameters():
+            for l in layer:
+                if "backbone.conv"+str(l) in n:
+                    p.requires_grad = False
+        
+
+
     @torch.no_grad()
     def init(self, img, box):
         # set to evaluation mode
@@ -279,15 +307,69 @@ class TrackerSiamFC(Tracker):
 # =============================================================================
         
         self.kernel = self.net.backbone(z)
+    
 
-    def maml_init(self, img, box):
+    # passing testing pair and random cropped box to this function to get cropped image
+    # should notice this might not suit datasets other than VOT
+    def get_crop(self,img,box):
+        # convert box to 0-indexed and center based [y, x, h, w]
+        box = np.array([
+            box[1] - 1 + (box[3] - 1) / 2,
+            box[0] - 1 + (box[2] - 1) / 2,
+            box[3], box[2]], dtype=np.float32)
+        center, target_sz = box[:2], box[2:]
+        print("get crop",box,center,target_sz)
+
+        # create hanning window
+        upscale_sz = self.cfg.response_up * self.cfg.response_sz
+        hann_window = np.outer(
+            np.hanning(self.upscale_sz),
+            np.hanning(self.upscale_sz))
+        hann_window /= hann_window.sum()
+
+        # search scale factors
+        scale_factors = self.cfg.scale_step ** np.linspace(
+            -(self.cfg.scale_num // 2),
+            self.cfg.scale_num // 2, self.cfg.scale_num)
+
+        # exemplar and search sizes
+        context = self.cfg.context * np.sum(target_sz)
+        z_sz = np.sqrt(np.prod(target_sz + context))
+        x_sz = z_sz * \
+                    self.cfg.instance_sz / self.cfg.exemplar_sz
+
+        # exemplar image
+        avg_color = np.mean(img, axis=(0, 1))
+        z = ops.crop_and_resize(
+            img, center, z_sz,
+            out_size=self.cfg.exemplar_sz,
+            border_value=avg_color)  # return cv2
+
+        z = cv2.normalize(z, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        # exemplar features
+        z = torch.from_numpy(z).to(
+            self.device).permute(2, 0, 1).unsqueeze(0).float()
+
+        # search image
+        x = [ops.crop_and_resize(
+            img, center, x_sz,
+            out_size=self.cfg.instance_sz,
+            border_value=avg_color)]
+        
+
+        return [z,x]
+
+    # when in finetuning stage, this function is used instead of the init function above
+    # can be set in test.py
+    def maml_init(self, img, box, frame_id):
         # convert box to 0-indexed and center based [y, x, h, w]
         box = np.array([
             box[1] - 1 + (box[3] - 1) / 2,
             box[0] - 1 + (box[2] - 1) / 2,
             box[3], box[2]], dtype=np.float32)
         self.center, self.target_sz = box[:2], box[2:]
-
+        print("maml init",box,self.center,self.target_sz)
         # create hanning window
         self.upscale_sz = self.cfg.response_up * self.cfg.response_sz
         self.hann_window = np.outer(
@@ -323,79 +405,290 @@ class TrackerSiamFC(Tracker):
             img, self.center, self.z_sz,
             out_size=self.cfg.exemplar_sz,
             border_value=self.avg_color)  # return cv2
-
+        
         z = cv2.normalize(z, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
         # exemplar features
         z = torch.from_numpy(z).to(
             self.device).permute(2, 0, 1).unsqueeze(0).float()
 
+
+        # z-kernel
+        self.avg_color = np.mean(img, axis=(0, 1))
+        z_kernel = ops.crop_and_resize(
+            img, self.center, self.z_sz,
+            out_size=self.cfg.exemplar_sz,
+            border_value=self.avg_color)  # return cv2
+
+        z_kernel = cv2.normalize(z_kernel, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        # exemplar features
+        z_kernel = torch.from_numpy(z_kernel).to(
+            self.device).permute(2, 0, 1).unsqueeze(0).float()
+
         # search images without transform
-        x = [ops.crop_and_resize(
-            img, self.center, self.x_sz * f,
-            out_size=self.cfg.instance_sz,
-            border_value=self.avg_color) for f in self.scale_factors]
-        x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
-        x = np.stack(x, axis=0)
-        x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
-
-
-        # search image with Transform
-        # =============================================================================
-        #transforms = inferenceTransforms(
-        #    exemplar_sz=self.cfg.exemplar_sz,
-        #    instance_sz=self.cfg.instance_sz,
-        #    context=self.cfg.context)
-        #
-        # three different transforms in X
         #x = [ops.crop_and_resize(
         #    img, self.center, self.x_sz * f,
         #    out_size=self.cfg.instance_sz,
         #    border_value=self.avg_color) for f in self.scale_factors]
-        #z,x = transforms(z,x)
-        #
-        # three same transforms in X
-        #x = [ops.crop_and_resize(
-        #    img, self.center, self.x_sz,
-        #    out_size=self.cfg.instance_sz,
-        #    border_value=self.avg_color)]
-        #z,x = transforms(z,x)
-        #x.append(x[0])
-        #x.append(x[0])
-        #
         #x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
         #x = np.stack(x, axis=0)
-        ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
-        #x = torch.from_numpy(x).to(self.device).float()
-        # =============================================================================
-        
-        random.seed()
-        rdn = random.randint(0,100)
-        torchvision.utils.save_image(z, './z_{}.png'.format(rdn))
-        torchvision.utils.save_image(x, './x_{}.png'.format(rdn))
- 
+        #x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
 
-        inference_update = 3
-        for idx in range(inference_update):
-            #ipdb.set_trace()
-            #x_prown,z_prown = self.get_random_pair(img,transforms)
-            loss,_ = self.train_step([z,x,[0]])
-            self.optimizer.zero_grad()
-            loss.backward()
-            print("loss update in init = {}".format(loss))
-            self.optimizer.step()
+        x = [ops.crop_and_resize(
+            img, self.center, self.x_sz,
+            out_size=self.cfg.instance_sz,
+            border_value=self.avg_color)]
+        #self.batch = self.make_up_transform_batch(z,x,self.tr_type[self.count])
+        
+        '''  creating a batch only
+        pure_zx = [z,x]
+        randomcropped_zx = []
+        #randomcropped_strategy = [1,1,2,2,3,3,3]
+        for i in range(self.tparam.rdncropped_times):
+            #self.tparam.crop = randomcropped_strategy[i]
+            random_bbox = self.get_random_crop_test_pair(img,box)
+            randomcropped_zx.append(self.get_crop(box=random_bbox,img=img))
+
+        self.batch = self.make_up_transform_batch_with_training(pure_zx=pure_zx,randomcropped_zx=randomcropped_zx,transform_type=self.tr_type[self.count],frame_id=frame_id,)
+        #self.optimizer = optim.SGD(self.net.parameters(),lr=self.cfg.initial_lr,weight_decay=self.cfg.weight_decay,momentum=self.cfg.momentum)
+        '''
+        # setup lr scheduler
+        #gamma = np.power(self.cfg.ultimate_lr / self.cfg.initial_lr,1.0 / self.cfg.epoch_num)
+        #self.lr_scheduler = ExponentialLR(self.optimizer, gamma)
+        
+        self.testing_epoch = []
+        for idx in range(4):
+            self.tparam.crop = idx
+            pure_zx = [z,x]
+            randomcropped_zx = []
+            if self.tparam.crop != 0:
+            #randomcropped_strategy = [1,1,2,2,3,3,3]
+                for i in range(self.tparam.rdncropped_times):
+                    random_bbox = self.get_random_crop_test_pair(img,box)
+                    randomcropped_zx.append(self.get_crop(box=random_bbox,img=img))
+            else:
+                randomcropped_zx = None
+            batch = self.make_up_transform_batch_with_training(pure_zx=pure_zx,randomcropped_zx=randomcropped_zx,transform_type=self.tr_type[self.count],frame_id=frame_id,)
+            self.testing_epoch.append(batch)
+
+        
+        count = 0
+
+        testing_iter = self.tparam.update_times
+        for idx in range(testing_iter):
+            for batch in self.testing_epoch:
+                z_update = batch[0].to(self.device)
+                x_update = batch[1].to(self.device)
+                loss,res = self.train_step([z_update,x_update,[0]])
+                torchvision.utils.save_image(z_update, './z{}.png'.format(count))
+                torchvision.utils.save_image(x_update, './x{}.png'.format(count))
+                torchvision.utils.save_image(res, './res{}.png'.format(count))
+                count = count+1
+                self.optimizer.zero_grad()
+                loss.backward()
+                #print("loss update in init = {}".format(loss))
+                self.optimizer.step()
+            self.lr_scheduler.step(epoch=idx)
+
+        ### update with onlt one batch
+        #inference_update = self.tparam.update_times
+        #for idx in range(inference_update):
+        #    lr = self.lr_scheduler.get_last_lr()
+        #    lr1 = self.optimizer.param_groups[0]['lr']
+        #    z_update = self.batch[0].to(self.device)
+        #    x_update = self.batch[1].to(self.device)
+        #    loss,_ = self.train_step([z_update,x_update,[0]])
+        #    self.optimizer.zero_grad()
+        #    loss.backward()
+        #    #print("loss update in init = {}".format(loss))
+        #    self.optimizer.step()
+        #    self.lr_scheduler.step(epoch=idx)
+
+
+
         # =============================================================================
         #         z = self.norm_trans(z).unsqueeze(0).to(self.device)
         # =============================================================================
         # set to evaluation mode
         self.net.eval()
-        self.kernel = self.net.backbone(z)
+        self.kernel = self.net.backbone(z_kernel)
 
-    def get_random_pair(self, img, transforms):
+    def get_random_crop_test_pair(self,img,box):
+        img_w, img_h = img.size
+        print("init",img.size)
+        print("box",box)
+        ### original random method
+        if self.tparam.crop == 1:
+            target_sz = [img_w // np.random.randint(4, 9), img_h // np.random.randint(4, 9)]
+            target_pos = [np.random.randint(target_sz[0], (img_w - target_sz[0])),
+                          np.random.randint(target_sz[1], (img_h - target_sz[1]))]
+        if self.tparam.crop == 2: 
+            target_sz = [box[3]*np.random.uniform(0.25, 0.75), box[2]*np.random.uniform(0.25, 0.75)]
+            target_pos = [int(np.random.uniform((box[1]-(0.25*box[3])),(box[1]+(0.25*box[3])))),int(np.random.uniform((box[0]-(0.25*box[2])),(box[0]+(0.25*box[2]))))]
+        
+        if self.tparam.crop == 3:
+        # box = [y,x,h,w]
+            target_pos = [int(np.random.uniform((box[1]-(0.25*box[3])),(box[1]+(0.25*box[3])))),int(np.random.uniform((box[0]-(0.25*box[2])),(box[0]+(0.25*box[2]))))]
+            target_sz = [int(box[3]*random.uniform(0.9,1.1)),int(box[2]*random.uniform(0.9,1.1))]
+        
+        if (target_pos[1]-(target_sz[1]/2))<0 :
+            target_sz[1] = 2*target_pos[1]
+        elif (target_pos[0]-(target_sz[0]/2))<0 :
+            target_sz[0] = 2*target_pos[0]
+        elif (target_pos[0]+(target_sz[0]/2))>img_w:
+            target_sz[0] = (img_w-target_pos[0])*2
+        elif (target_pos[1]+(target_sz[1]/2))>img_h:
+            target_sz[1] = (img_h-target_pos[1])*2
+            #target_pos = [int(np.random.uniform((box[1]-(0.25*box[3])),(box[1]+(0.25*box[3])))),int(np.random.uniform((box[0]-(0.25*box[2])),(box[0]+(0.25*box[2]))))]
+            #target_sz = [int(box[3]*random.uniform(0.9,1.1)),int(box[2]*random.uniform(0.9,1.1))]
+            #print(target_pos,target_sz)
+            #ipdb.set_trace()
+        
+        box = [target_pos[0],target_pos[1],target_sz[0],target_sz[1]]
+        print("rdn crop",box)
+        #ipdb.set_trace()
+        return box
 
-        #z = cv2_RGB_loader(img)  # get RGB img
-        z = img
-        img_h, img_w, = self.z_sz, self.z_sz
+    def make_up_transform_batch(self,pure_zx,randomcropped_zx,transform_type):
+        z,x = pure_zx
+        transforms = inferenceTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        self.batch_z = []
+        self.batch_x = []
+        for i in range(8):
+            transforms = inferenceTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+            tr_z,tr_x = transforms(z,x)
+            tr_x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in tr_x]
+            tr_x = np.stack(tr_x, axis=0)
+            tr_x = torch.from_numpy(tr_x).to(self.device).float()
+            self.batch_z.append(tr_z.squeeze(0))
+            self.batch_x.append(tr_x.squeeze(0))
+        # =============================================================================
+        self.batch_z = torch.stack(self.batch_z)
+        self.batch_x = torch.stack(self.batch_x) 
+        self.batch=[self.batch_z,self.batch_x]
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(self.batch_z, './z_{}.png'.format(0))
+        torchvision.utils.save_image(self.batch_x, './x_{}.png'.format(0))
+        return self.batch
+    
+    def make_up_transform_batch_with_training(self,pure_zx,transform_type,frame_id,randomcropped_zx=None):
+        z,x = pure_zx
+        # set up
+        neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
+        root_dir = '../dataset/ILSVRC2015'      #Dataset path
+        seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
+        # set up transforms
+        transforms_train = SiamFCTransforms_testphase(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        dataset = Pair(
+            seqs=seqs,
+            transforms=transforms_train, supervised='self-supervised', img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+
+        # setup dataloader
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.batch_size,
+            shuffle=True,
+            num_workers=self.cfg.num_workers,
+            pin_memory=self.cuda,
+            drop_last=True)
+        
+        transforms = inferenceTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        
+        if frame_id == 0:
+            self.batch = next(iter(dataloader))
+
+        if self.tparam.crop == 0:
+            for i in range(8):
+                tr_z,tr_x = transforms(z,x)
+                tr_x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in tr_x]
+                tr_x = np.stack(tr_x, axis=0)
+                ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
+                tr_x = torch.from_numpy(tr_x).to(self.device).float()
+                '''
+                if frame_id != 0:
+                    self.batch[0][self.cur_rdn] = tr_z
+                    self.batch[1][self.cur_rdn] = tr_x
+                else:
+                    self.batch = next(iter(dataloader))
+                    random.seed()
+                    #self.cur_rdn = random.randint(0,7)
+                '''
+                self.cur_rdn = i
+                self.batch[0][self.cur_rdn] = tr_z
+                self.batch[1][self.cur_rdn] = tr_x
+        
+        if randomcropped_zx is not None:
+            for (j,[r_z,r_x]) in enumerate(randomcropped_zx):
+                tr_z,tr_x = transforms(r_z,r_x)
+                tr_x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in tr_x]
+                tr_x = np.stack(tr_x, axis=0)
+                tr_x = torch.from_numpy(tr_x).to(self.device).float()
+                idx = j
+                self.batch[0][idx] = tr_z
+                self.batch[1][idx] = tr_x
+
+
+
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(self.batch[0], './zqq_{}.png'.format(rdn))
+        torchvision.utils.save_image(self.batch[1], './xqq_{}.png'.format(rdn))
+
+        return self.batch
+
+
+
+    def make_up_batch(self,vot_zx,frame_id):
+        # set up
+        neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
+        root_dir = '../dataset/ILSVRC2015'      #Dataset path
+        seqs = ImageNetVID(root_dir, subset=['train'], neg_dir=neg_dir[0])
+        # set up transforms
+        transforms = SiamFCTransforms_testphase(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+        dataset = Pair(
+            seqs=seqs,
+            transforms=transforms, supervised='self-supervised', img_loader=cv2_RGB_loader, neg=self.cfg.neg)
+
+        # setup dataloader
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.batch_size,
+            shuffle=True,
+            num_workers=self.cfg.num_workers,
+            pin_memory=self.cuda,
+            drop_last=True)
+
+        if frame_id != 0:
+            self.batch[0][self.cur_rdn] = vot_zx[0]
+            self.batch[1][self.cur_rdn] = vot_zx[1]
+        else:
+            self.batch = next(iter(dataloader))
+            random.seed()
+            self.cur_rdn = random.randint(0,7)
+            self.batch[0][self.cur_rdn] = vot_zx[0]
+            self.batch[1][self.cur_rdn] = vot_zx[1]
+        return self.batch
+
+    def get_random_pair(self, img, transforms=None):
+        z = np.asarray(img)
+        img_h, img_w, _ = z.shape
 
         target_sz = [img_w // np.random.randint(4, 9), img_h // np.random.randint(4, 9)]
         target_pos = [np.random.randint(target_sz[0], (img_w - target_sz[0])),
@@ -618,8 +911,6 @@ class TrackerSiamFC(Tracker):
         # set network mode
         self.net.train(backward)
 
-
-        #ipdb.set_trace()
         # parse batch data
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
@@ -655,8 +946,7 @@ class TrackerSiamFC(Tracker):
 
         
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked *masked_2_loss
-
-        
+            
         return loss_siam, responses
     
     @torch.enable_grad()
@@ -669,6 +959,7 @@ class TrackerSiamFC(Tracker):
         # create save_dir folder
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
+        
         # setup dataset
         transforms = SiamFCTransforms(
             exemplar_sz=self.cfg.exemplar_sz,
@@ -691,13 +982,14 @@ class TrackerSiamFC(Tracker):
         # loop over epochs
         for epoch in range(self.cfg.epoch_num):
             # update lr at each epoch
-            
+#           # ipdb.set_trace()
 
             # loop over dataloader
             for it, batch in enumerate(dataloader):
 
-#                torchvision.utils.save_image(batch[0][0], 'test0.png')
-#                torchvision.utils.save_image(batch[1][0], 'test1.png')
+                torchvision.utils.save_image(batch[0][0], 'test0.png')
+                torchvision.utils.save_image(batch[1][0], 'test1.png')
+                #ipdb.set_trace()
 #                raise ""
                 
                 data_time = time.time() -end
@@ -731,10 +1023,6 @@ class TrackerSiamFC(Tracker):
             torch.save(self.net.state_dict(), net_path)
         
         json.dump(self.cfg._asdict(), open(os.path.join(save_dir, 'config.json'), 'w'), indent=4)
-
-
-    #def meta_train_over(self,seqs,val_seqs=None,save_dir='pretrained',supervised='supervised'):
-
 
     def _create_labels(self, size):
         def logistic_labels(x, y, r_pos, r_neg):
