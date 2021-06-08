@@ -56,7 +56,7 @@ class maml_trainer(nn.Module):
         # file path and saving initialization
         self.neg_dir = ['./seq2neg_dict.json', './cluster_dict.json']
         self.root_dir = '../dataset/ILSVRC2015'  # Dataset path
-        self.save_dir = './checkpoints/maml_nomultiplestep/'
+        self.save_dir = './checkpoints/maml_rdn_query_pair_maml_optim_sche/'
         self.save_path = os.path.join(self.save_dir, 'S2SiamFC')
 
         # inner tracker related initialization
@@ -102,11 +102,11 @@ class maml_trainer(nn.Module):
             print(key, value.shape, value.device)
 
         # outer loop related initialization
-        ''' [settings in maml]
+        ''' [settings in maml]'''
         self.optimizer = optim.Adam(self.trainable_parameters(), lr=self.maml_args.meta_learning_rate, amsgrad=False)
-        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optimizer, T_max=self.maml_args.total_epochs,
+        self.lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optimizer, T_max=self.maml_args.total_epochs,
                                                             eta_min=self.maml_args.min_learning_rate)
-        '''
+        
         ''' [settings in original s2siamfc] '''
 
         print("Outer Loop Parameters")
@@ -117,6 +117,7 @@ class maml_trainer(nn.Module):
         gamma = np.power(
             self.cfg.ultimate_lr / self.cfg.initial_lr,
             1.0 / self.cfg.epoch_num)
+        '''
         self.optimizer = optim.SGD(
             self.trainable_parameters(),
             lr=self.cfg.initial_lr,
@@ -124,7 +125,7 @@ class maml_trainer(nn.Module):
             momentum=self.cfg.momentum)
 
         self.lr_scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma)
-
+        '''
         # training related initialization
         self.seqs = ImageNetVID(self.root_dir, subset=['train'], neg_dir=self.neg_dir[0])
         self.current_iter = 0
@@ -270,7 +271,7 @@ class maml_trainer(nn.Module):
             'total_num_inner_loop_steps': 5,  # need to check out from maml github
             'use_second_order': True,
             'use_learnable_learning_rates': True,  # because of maml++
-            'use_multi_step_loss_optimization': False,
+            'use_multi_step_loss_optimization': True,
             'multi_step_loss_num_epochs': 10,
             'meta_learning_rate': 0.001,  # need to check out from maml github
             'min_learning_rate': 0.0001,  # need to check out from maml github
@@ -326,7 +327,7 @@ class maml_trainer(nn.Module):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-        writer = SummaryWriter('runs/maml_first_try')
+        writer = SummaryWriter('runs/maml_rdn_query')
 
         # setup dataset
         transforms = SiamFCTransforms(

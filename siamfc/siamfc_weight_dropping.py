@@ -1,7 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+import random
+import PIL
 import ipdb
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -24,7 +27,7 @@ from .backbones import AlexNet, Resnet18, Inception, VGG16
 from .heads import SiamFC, SiamFC_1x1_DW
 from .losses import AC_BalancedLoss, BalancedLoss, RankLoss
 from .datasets import Pair
-from .transforms import SiamFCTransforms
+from .transforms import SiamFCTransforms,inferenceTransforms
 from utils.lr_helper import build_lr_scheduler
 from utils.img_loader import cv2_RGB_loader
 from got10k.trackers import Tracker
@@ -58,6 +61,7 @@ class TrackerSiamFC(Tracker):
     def __init__(self, net_path=None, name='SiamFC', loss_setting=[0, 1.5, 0],**kwargs):
         super(TrackerSiamFC, self).__init__(name, True)
         self.cfg = self.parse_args(**kwargs)
+        self.net_path = net_path
 
         # setup GPU device if available
         self.cuda = torch.cuda.is_available()
@@ -75,38 +79,38 @@ class TrackerSiamFC(Tracker):
             
             # loading s2siamfc pretrain
             ################################################################
-            #tmp_model = state_dict.copy()
-            #oldkey = []
-            #for key in tmp_model.keys():
-            #    key_split = key.split(".")
-            #    if key_split[0] != 'head':
-            #        if key_split[2] == '0':
-            #            key_split[2] = "conv"
-            #        elif key_split[2] == '1':
-            #            key_split[2] = "bn"
-            #        str = "."
-            #        new_key = str.join(key_split)
-            #        state_dict[new_key]=tmp_model[key]
-            #        oldkey.append(key)
-            #for key in oldkey:
-            #    del state_dict[key]
-            ################################################################
-            
-            # loading maml trained
-            ################################################################
             tmp_model = state_dict.copy()
             oldkey = []
             for key in tmp_model.keys():
                 key_split = key.split(".")
                 if key_split[0] != 'head':
-                    if key_split[2] == 'norm_layer':
+                    if key_split[2] == '0':
+                        key_split[2] = "conv"
+                    elif key_split[2] == '1':
                         key_split[2] = "bn"
-                        str = "."
-                        new_key = str.join(key_split)
-                        state_dict[new_key] = tmp_model[key]
-                        oldkey.append(key)
+                    str = "."
+                    new_key = str.join(key_split)
+                    state_dict[new_key]=tmp_model[key]
+                    oldkey.append(key)
             for key in oldkey:
                 del state_dict[key]
+            ################################################################
+            
+            # loading maml trained
+            ################################################################
+            #tmp_model = state_dict.copy()
+            #oldkey = []
+            #for key in tmp_model.keys():
+            #    key_split = key.split(".")
+            #    if key_split[0] != 'head':
+            #        if key_split[2] == 'norm_layer':
+            #            key_split[2] = "bn"
+            #            str = "."
+            #            new_key = str.join(key_split)
+            #            state_dict[new_key] = tmp_model[key]
+            #            oldkey.append(key)
+            #for key in oldkey:
+            #    del state_dict[key]
             ################################################################
 
             self.net.load_state_dict(state_dict)
@@ -130,6 +134,50 @@ class TrackerSiamFC(Tracker):
             1.0 / self.cfg.epoch_num)
         self.lr_scheduler = ExponentialLR(self.optimizer, gamma)
 #        self.lr_scheduler = build_lr_scheduler(self.optimizer, True, self.cfg.initial_lr, self.cfg.ultimate_lr, self.cfg.epoch_num)
+
+    def reload(self):
+        print("--------reload model--------")
+        state_dict = torch.load(self.net_path, map_location=lambda storage, loc: storage)
+
+        # loading s2siamfc pretrain
+        ################################################################
+        tmp_model = state_dict.copy()
+        oldkey = []
+        for key in tmp_model.keys():
+            key_split = key.split(".")
+            if key_split[0] != 'head':
+                if key_split[2] == '0':
+                    key_split[2] = "conv"
+                elif key_split[2] == '1':
+                    key_split[2] = "bn"
+                str = "."
+                new_key = str.join(key_split)
+                state_dict[new_key]=tmp_model[key]
+                oldkey.append(key)
+        for key in oldkey:
+            del state_dict[key]
+        ################################################################
+
+        # loading maml trained
+        ################################################################
+        #tmp_model = state_dict.copy()
+        #oldkey = []
+        #for key in tmp_model.keys():
+        #    key_split = key.split(".")
+        #    if key_split[0] != 'head':
+        #        if key_split[2] == 'norm_layer':
+        #            key_split[2] = "bn"
+        #            str = "."
+        #            new_key = str.join(key_split)
+        #            state_dict[new_key] = tmp_model[key]
+        #            oldkey.append(key)
+        #for key in oldkey:
+        #    del state_dict[key]
+        ################################################################
+
+        self.net.load_state_dict(state_dict)
+        self.net = self.net.to(self.device)
+
 
     def parse_args(self, **kwargs):
         # default parameters
@@ -159,7 +207,7 @@ class TrackerSiamFC(Tracker):
             'momentum': 0.9,
             'r_pos': 16,
             'r_neg': 0,
-            'neg' : 0.2,
+            'neg' : 0,
             # loss weighting
             'no_mask' : 0.7,
             'masked' : 0.15,
@@ -282,26 +330,50 @@ class TrackerSiamFC(Tracker):
         z = torch.from_numpy(z).to(
             self.device).permute(2, 0, 1).unsqueeze(0).float()
 
-        # search images
+        # search images without transform
         x = [ops.crop_and_resize(
             img, self.center, self.x_sz * f,
             out_size=self.cfg.instance_sz,
             border_value=self.avg_color) for f in self.scale_factors]
         x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
         x = np.stack(x, axis=0)
-        x = torch.from_numpy(x).to(
-            self.device).permute(0, 3, 1, 2).float()
+        x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
 
 
-        transforms = SiamFCTransforms(
-            exemplar_sz=self.cfg.exemplar_sz,
-            instance_sz=self.cfg.instance_sz,
-            context=self.cfg.context)
-        '''
-        dataset = Pair(
-            seqs="not important",
-            transforms=transforms, supervised="self-supervised", img_loader=cv2_RGB_loader, neg=self.cfg.neg)
-        '''
+        # search image with Transform
+        # =============================================================================
+        #transforms = inferenceTransforms(
+        #    exemplar_sz=self.cfg.exemplar_sz,
+        #    instance_sz=self.cfg.instance_sz,
+        #    context=self.cfg.context)
+        #
+        # three different transforms in X
+        #x = [ops.crop_and_resize(
+        #    img, self.center, self.x_sz * f,
+        #    out_size=self.cfg.instance_sz,
+        #    border_value=self.avg_color) for f in self.scale_factors]
+        #z,x = transforms(z,x)
+        #
+        # three same transforms in X
+        #x = [ops.crop_and_resize(
+        #    img, self.center, self.x_sz,
+        #    out_size=self.cfg.instance_sz,
+        #    border_value=self.avg_color)]
+        #z,x = transforms(z,x)
+        #x.append(x[0])
+        #x.append(x[0])
+        #
+        #x = [cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F) for img in x]
+        #x = np.stack(x, axis=0)
+        ##x = torch.from_numpy(x).to(self.device).permute(0, 3, 1, 2).float()
+        #x = torch.from_numpy(x).to(self.device).float()
+        # =============================================================================
+        
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(z, './z_{}.png'.format(rdn))
+        torchvision.utils.save_image(x, './x_{}.png'.format(rdn))
+ 
 
         inference_update = 3
         for idx in range(inference_update):
@@ -553,8 +625,8 @@ class TrackerSiamFC(Tracker):
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
         
-        torchvision.utils.save_image(z, './test_z.png')
-        torchvision.utils.save_image(x, './test_x.png')
+        #torchvision.utils.save_image(z, './test_z.png')
+        #torchvision.utils.save_image(x, './test_x.png')
 
         # inference
         feat_z, feat_x = self.net.backbone(z), self.net.backbone(x)
@@ -571,9 +643,8 @@ class TrackerSiamFC(Tracker):
         z_masked_2 = get_adv_mask_img(z, feat_z, grad_z)      
         
         #torchvision.utils.save_image(z_dropping, './test_z_dropping.png')
-        torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
-        torchvision.utils.save_image(z_masked_2, './test_z_masked_2.png')
-
+        #torchvision.utils.save_image(z_masked_1, './test_z_masked_1.png')
+        #torchvision.utils.save_image(z_masked_2, './test_z_masked_2.png')
         
         responses_masked_1 = self.net(z_masked_1, x)
         responses_masked_2 = self.net(z_masked_2, x)
@@ -616,7 +687,6 @@ class TrackerSiamFC(Tracker):
             pin_memory=self.cuda,
             drop_last=True)
         
-        ipdb.set_trace()
         end = time.time()
         # loop over epochs
         for epoch in range(self.cfg.epoch_num):
@@ -624,7 +694,6 @@ class TrackerSiamFC(Tracker):
             
 
             # loop over dataloader
-            ipdb.set_trace()
             for it, batch in enumerate(dataloader):
 
 #                torchvision.utils.save_image(batch[0][0], 'test0.png')
@@ -648,7 +717,7 @@ class TrackerSiamFC(Tracker):
                 if (it+1) %50 == 0:
                     print('Epoch: {} [{}/{}] {:.5f} {:.5f} {:.5f}'.format(
                         epoch + 1, it + 1, len(dataloader), avg.loss, avg.batch_time, avg.data_time))
-#                    print('Num_high:{:d}'.format(torch.sum(responses.detach()>0.8)))
+#                   print('Num_high:{:d}'.format(torch.sum(responses.detach()>0.8)))
 
                     sys.stdout.flush()
                     

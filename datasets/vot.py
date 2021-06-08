@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 import json
 from collections import OrderedDict
 
-class ImageNetVID(object):
+class VOT(object):
     r"""`ImageNet Video Image Detection (VID) <https://image-net.org/challenges/LSVRC/2015/#vid>`_ Dataset.
     Publication:
         ``ImageNet Large Scale Visual Recognition Challenge``, O. Russakovsky,
@@ -29,15 +29,15 @@ class ImageNetVID(object):
         cache_dir (string, optional): Directory for caching the paths and annotations
             for speeding up loading. Default is ``cache/imagenet_vid``.
     """
-    def __init__(self, root_dir, subset=('train', 'val'),
-                 cache_dir='cache/imagenet_vid', neg_dir=None):
+    def __init__(self, root_dir, subset=('train','val'),
+                 cache_dir='cache/vot', neg_dir=None):
         self.root_dir = root_dir
         self.cache_dir = cache_dir
         self.neg_dir = neg_dir
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
         if isinstance(subset, str):
-            assert subset in ['train', 'val']
+            assert subset in ['train','val']
             self.subset = [subset]
         elif isinstance(subset, (list, tuple)):
             assert all([s in ['train', 'val'] for s in subset])
@@ -63,12 +63,12 @@ class ImageNetVID(object):
         
         if self.neg_dir:
             seq_dir, frames, cluster_id = self.seq_dict[seq_name]
-            img_files = [os.path.join(seq_dir, '%06d.JPEG' % f) for f in frames]
+            img_files = [os.path.join(seq_dir, '%08d.jpg' % f) for f in frames]
             return img_files, seq_name, cluster_id
         
         else:
             seq_dir, frames = self.seq_dict[seq_name]
-            img_files = [os.path.join(seq_dir, '%06d.JPEG' % f) for f in frames]
+            img_files = [os.path.join(seq_dir, '%08d.jpg' % f) for f in frames]
             return img_files, seq_name
 
     def __len__(self):
@@ -88,6 +88,7 @@ class ImageNetVID(object):
         # image and annotation paths
         print('Gather sequence paths...')
         seq_dirs = []
+        '''
         if 'train' in self.subset:
             seq_dirs_ = sorted(glob.glob(os.path.join(
                 self.root_dir, 'Data/VID/train/ILSVRC*/ILSVRC*')))
@@ -96,6 +97,18 @@ class ImageNetVID(object):
             seq_dirs_ = sorted(glob.glob(os.path.join(
                 self.root_dir, 'Data/VID/val/ILSVRC2015_val_*')))
             seq_dirs += seq_dirs_
+        '''
+        dirs = os.listdir(self.root_dir)
+        pre_seq_dirs = []
+        for d in dirs:
+            if not str(d).endswith((".json",".txt")):
+                print(str(d))
+                pre_seq_dirs.append(d)
+        for d in pre_seq_dirs:
+            seq_dirs_ = sorted(glob.glob(os.path.join(
+                self.root_dir,d)))
+            seq_dirs += seq_dirs_
+
         seq_names = [os.path.basename(s) for s in seq_dirs]
 
         # cache paths
@@ -110,19 +123,25 @@ class ImageNetVID(object):
 
             key = '%s' % (seq_name)
             
-            
+            #ipdb.set_trace()
             if self.neg_dir:
                 #ipdb.set_trace()
                 neg_cluster_id = neg_dict[seq_name]
-                frames_num = len(glob.glob(seq_dirs[s] + '/*'))
+                frames_num = len(glob.glob(seq_dirs[s] +'/*'))
                 # store paths
                 seq_dict.update([(key, [seq_dirs[s], list(map(int, np.arange(frames_num))), neg_cluster_id])])
             else:
+                dirs = os.listdir(seq_dirs[s])
+                pre_seq_dirs = []
+                for d in dirs:
+                    if str(d).endswith(".jpg"):
+                        pre_seq_dirs.append(d)
                 #ipdb.set_trace()
-                frames_num = len(glob.glob(seq_dirs[s] + '/*'))
+                frames_num = len(pre_seq_dirs)
                 # store paths
                 seq_dict.update([(key, [seq_dirs[s], list(map(int, np.arange(frames_num)))])])
-        ipdb.set_trace()
+                print(key,frames_num)
+        #ipdb.set_trace()
 
         # store seq_dict
         #ipdb.set_trace()

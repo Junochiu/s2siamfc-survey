@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import random
 import ipdb
 import torch
 import torch.nn as nn
@@ -343,6 +344,14 @@ class TrackerSiamFC(Tracker):
         x = np.stack(x, axis=0)
         x = torch.from_numpy(x).to(
             self.device).permute(0, 3, 1, 2).float()
+         
+        # add transform
+        transforms = SiamFCTransforms(
+            exemplar_sz=self.cfg.exemplar_sz,
+            instance_sz=self.cfg.instance_sz,
+            context=self.cfg.context)
+
+        x,z = transforms.inference_transform(x,z)
 
         inference_update = 3
         for idx in range(inference_update):
@@ -481,11 +490,14 @@ class TrackerSiamFC(Tracker):
         # parse batch data
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
-        q_x = batch[2].to(self.device, non_blocking=self.cuda)
+        if phase == "support":
+            q_z = batch[2].to(self.device, non_blocking=self.cuda)
+            q_x = batch[3].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
-
-        #torchvision.utils.save_image(z, './test_z.png')
-        #torchvision.utils.save_image(x, './test_x.png')
+        random.seed()
+        rdn = random.randint(0,100)
+        torchvision.utils.save_image(z, './z_{}.png'.format(rdn))
+        torchvision.utils.save_image(x, './x_{}.png'.format(rdn))
 
         param_dict = dict()
         params = {key: value[0] for key, value in names_weight_copy.items()}
@@ -523,10 +535,13 @@ class TrackerSiamFC(Tracker):
 
         loss_siam = self.cfg.no_mask * raw_loss + self.cfg.masked * masked_1_loss + self.cfg.masked * masked_2_loss
         if phase == 'support':
-            return [batch[0], q_x, neg], loss_siam, responses
+            return [q_z, q_x, neg], loss_siam, responses
+        elif phase == 'support oritemp':
+            return [q_z, x, z, neg], loss_siam, responses
+
         return loss_siam, responses
 
-    def query_step(self,batch, names_weight_copy, phase, num_step, backward=False):
+    def query_step(self,batch, names_weight_copy, phase, num_step, backward=False, original_temp=False):
         def get_labels(responses):
             # create labels
             r_b, r_c, r_w, r_h = responses.size()
@@ -552,9 +567,20 @@ class TrackerSiamFC(Tracker):
         z = batch[0].to(self.device, non_blocking=self.cuda)
         x = batch[1].to(self.device, non_blocking=self.cuda)
         neg = batch[-1]
+
+        #feat_z = self.net.backbone(z, num_step=num_step, params=param_dict['backbone'])
+        #feat_x = self.net.backbone(x, num_step=num_step, params=param_dict['backbone'])
+        #responses = self.net.head(feat_z, feat_x, num_step=num_step, params=param_dict['head'])
+
         responses = self.net.forward(z,x,params=names_weight_copy)
-        labels = get_labels(responses)
-        loss = self.criterion(responses, labels)
+        if original_temp:
+            original_x = batch[2].to(self.device,non_blocking=self.cuda)
+            original_responses = self.net.forward(original_responses,x,param=names_weight_copy)
+            labels = get_labels(original_responses)
+            loss = self.cfg.no_mask * self.criterion(original_responses,labels) + self.cfg.masked * self.criterion(responses,labels)
+        else:
+            labels = get_labels(responses)
+            loss = self.criterion(responses, labels)
 
         return loss, responses
 

@@ -39,6 +39,7 @@ class Pair(Dataset):
         if self.supervised == 'self-supervised':
             neg = self.neg and self.neg > np.random.rand()
             if neg:
+                #print("-----neg-----")
                 random_fid_z = np.random.choice(len(img_files))
 
                 cluster_z_list = self.cluster_dict[str(cluster_id)]
@@ -51,9 +52,7 @@ class Pair(Dataset):
                 img_files_neg = [os.path.join(seq_dir_neg, '%06d.JPEG' % f) for f in frames_neg]
                 
                 random_fid_neg = np.random.choice(len(img_files_neg))
-                random_fid_query = np.random.choice(len(img_files_neg))
-                while random_fid_neg == random_fid_query:
-                    random_fid_query = np.random.choice(len(img_files_neg))
+
 # =============================================================================
 #                 random_vid_neg = np.random.choice(len(self))
 #                 random_vid_neg = self.indices[random_vid_neg % len(self.indices)]
@@ -75,7 +74,6 @@ class Pair(Dataset):
 #                random_fid1, random_fid2 = np.random.choice(a=len(img_files), size=2, replace=False)
                 z = self.img_loader(img_files[random_fid_z])
                 x = self.img_loader(img_files_neg[random_fid_neg])
-                query_x = self.img_loader(img_files_neg[random_fid_query])
 
 # =============================================================================
 #                 z = cv2.imread(img_files[random_fid_z], cv2.IMREAD_COLOR)
@@ -86,7 +84,6 @@ class Pair(Dataset):
 
                 imgz_h, imgz_w, _ = z.shape
                 imgx_h, imgx_w, _ = x.shape
-                imgq_h, imgq_w, _ = query_x.shape
 #                target_pos = [img_w//2, img_h//2]
 #                target_sz = [img_w//6, img_h//6]
 
@@ -96,24 +93,48 @@ class Pair(Dataset):
                 target_sz_x = [imgx_w//np.random.randint(4, 9), imgx_h//np.random.randint(4, 9)]
                 target_pos_x = [np.random.randint(target_sz_x[0], (imgx_w-target_sz_x[0])), np.random.randint(target_sz_x[1], (imgx_h-target_sz_x[1]))]
 
-                target_sz_q = [imgq_w // np.random.randint(4, 9), imgq_h // np.random.randint(4, 9)]
-                target_pos_q = [np.random.randint(target_sz_q[0], (imgq_w - target_sz_q[0])),
-                                np.random.randint(target_sz_q[1], (imgq_h - target_sz_q[1]))]
-
                 box_z = self._cxy_wh_2_bbox(target_pos_z, target_sz_z)
                 box_x = self._cxy_wh_2_bbox(target_pos_x, target_sz_x)
-                box_q = self._cxy_wh_2_bbox(target_pos_q, target_sz_q)
 
+
+######### create query set #########
                 if self.gen_query:
-                    item = (z, x, query_x, box_z, box_x, box_q)
-                else:
-                    item = (z, x, box_z, box_x)
+                    random_fid_query_z = np.random.choice(len(img_files))
+                    random_fid_query_x = np.random.choice(len(img_files_neg))
+
+                    query_z = self.img_loader(img_files[random_fid_query_z])
+                    query_x = self.img_loader(img_files_neg[random_fid_query_x])
+
+                    imgqz_h, imgqz_w, _ = query_z.shape
+                    imgqx_h, imgqx_w, _ = query_x.shape
+#                   target_pos = [img_w//2, img_h//2]
+#                   target_sz = [img_w//6, img_h//6]
+
+                    target_sz_qz = [imgqz_w//np.random.randint(4, 9), imgqz_h//np.random.randint(4, 9)]
+                    target_pos_qz = [np.random.randint(target_sz_qz[0], (imgqz_w-target_sz_qz[0])), np.random.randint(target_sz_qz[1], (imgqz_h-target_sz_qz[1]))]
+
+                    target_sz_qx = [imgqx_w//np.random.randint(4, 9), imgqx_h//np.random.randint(4, 9)]
+                    target_pos_qx = [np.random.randint(target_sz_qx[0], (imgqx_w-target_sz_qx[0])), np.random.randint(target_sz_qx[1], (imgqx_h-target_sz_qx[1]))]
+
+                    box_qz = self._cxy_wh_2_bbox(target_pos_qz, target_sz_qz)
+                    box_qx = self._cxy_wh_2_bbox(target_pos_qx, target_sz_qx)
+                    
+                    #while random_fid_neg == random_fid_query:
+                    #    random_fid_query = np.random.choice(len(img_files_neg))
+                    item = (z,x,box_z,box_x,query_z,query_x,box_qz,box_qx)
+                    if self.transforms is not None:
+                        item = self.transforms(*item)
+                    return item + (neg,)
+###### end of create query set ######
+
+                item = (z, x, box_z, box_x)
                 if self.transforms is not None:
                     item = self.transforms(*item)
                                 
                 return item + (neg, )            
             else:
-                random_fid = np.random.choice(len(img_files))
+                #print("-----not neg-----")
+                random_fid = np.random.choice(range(1,len(img_files)))
 # =============================================================================
 #                 z = cv2.imread(img_files[random_fid], cv2.IMREAD_COLOR)
 #     #            x = cv2.imread(img_files[random_fid], cv2.IMREAD_COLOR)
@@ -130,7 +151,22 @@ class Pair(Dataset):
 
                 box = self._cxy_wh_2_bbox(target_pos, target_sz)
                 
-                item = (z, z, box, box)
+######### create query set #########
+                if self.gen_query:
+                    random_fid_query = np.random.choice(len(img_files))
+                    query_z = self.img_loader(img_files[random_fid_query])
+                    imgqz_h, imgqz_w, _ = query_z.shape
+                    target_sz_qz = [imgqz_w//np.random.randint(4, 9), imgqz_h//np.random.randint(4, 9)]
+                    target_pos_qz = [np.random.randint(target_sz_qz[0], (imgqz_w-target_sz_qz[0])), np.random.randint(target_sz_qz[1], (imgqz_h-target_sz_qz[1]))]
+                    box_qz = self._cxy_wh_2_bbox(target_pos_qz, target_sz_qz)
+                    item = (z,z,box,box,query_z,query_z,box_qz,box_qz)
+                    if self.transforms is not None:
+                        item = self.transforms(*item)
+                    return item + (neg,)
+
+###### end of create query set ######
+
+                item = (z,z,box,box)
                 if self.transforms is not None:
                     item = self.transforms(*item)
                        
