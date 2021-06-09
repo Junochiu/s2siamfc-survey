@@ -3,6 +3,23 @@ This repo contain the original code of S2siamfc, and modified versions with seve
 ## Installation
 
 ## Testing the tracker
+### S2Siamfc
+1. set up dataset and model path in ```S2simafc/test.py```
+2. uncomment ```# testing pretrain``` section of code in ```S2simafc/test.py```
+3. uncomment ```# loading pretrain``` section of code in load model function ```S2simafc/siamfc/siamfc_weight_dropping.py```
+4. ```python test.py```
+
+### S2Siamfc + initial update before tracking
+1. set up dataset and model path in ```S2simafc/test.py```
+2. uncomment ```# testing pretrain with initial update``` and ```parsing parameter``` section of code in ```S2simafc/test.py```
+3. uncomment ```# loading pretrain``` section of code in load model function ```S2simafc/siamfc/siamfc_weight_dropping.py```
+4. ```bash test.sh```
+
+### S2Siamfc +  MAML
+1. set up dataset and model path in ```S2simafc/test.py```
+2. uncomment ```# testing maml trained model``` section of code in ```S2simafc/test.py```
+3. uncomment ```# loading maml trained``` section of code in load model function ```S2simafc/siamfc/siamfc_weight_dropping.py```
+4. ```python test.py```
 
 
 ## Training the tracker
