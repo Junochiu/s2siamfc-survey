@@ -1,7 +1,7 @@
 # S2Siamfc - finetuning survey
 This repo contain the original code of S2siamfc, and modified versions with several different implementations.
 ## Installation
-checkout SETUP.md [a relative link](SETUP.md)
+checkout [SETUP.md](SETUP.md)
 ## Testing the tracker
 ### S2Siamfc
 1. set up dataset and model path in ```S2simafc/test.py```
