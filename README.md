@@ -49,7 +49,7 @@ This repo contain the original code of S2siamfc, and modified versions with seve
 └── test.py / test.sh / maml_train.py / train.py
  
 ```
-## Basic operations in ./siamfc
+## Basic Intros to S2Siamfc
 ### File structure
 * Most of the implemetation keypoints  of S2siamfc are in siamfc_weight_dropping (labeling, training steps, tracking steps)
 * siamfc_maml_weight_dropping construct the maml inner loop using the maml version tracker(maml_basicstructure.py) and optimizer(inner_loop_optimizer).<br>
