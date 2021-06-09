@@ -217,13 +217,13 @@ class ExperimentVOT(object):
 
                         # use maml_init for model update with first frame
                         # =============================================================================
-                        # tracker.reload()
-                        # tracker.maml_init(frame, anno_rects[0],f)
+                        tracker.reload()
+                        tracker.maml_init(frame, anno_rects[0],f)
                         # =============================================================================
 
                         # for original testing 
                         # =============================================================================
-                        tracker.init(frame, anno_rects[0])
+                        # tracker.init(frame, anno_rects[0])
                         # =============================================================================
                         boxes.append([1])
 
@@ -234,13 +234,13 @@ class ExperimentVOT(object):
                             
                             # use maml_init for model update with first frame
                             # =============================================================================
-                            # tracker.maml_init(frame, anno_rects[f],f)
+                            tracker.maml_init(frame, anno_rects[f],f)
                             # use maml_init for model update with first frame
                             # =============================================================================
                         
                             # for original testing 
                             # =============================================================================
-                            tracker.init(frame, anno_rects[f])
+                            # tracker.init(frame, anno_rects[f])
                             # =============================================================================
                             boxes.append([1])
                         else:
