@@ -23,35 +23,6 @@ if __name__ == '__main__':
     #    tracker = TrackerSiamFC(net_path=net_path, name='eccv_best_linear')
     # ssiam_base
 
-    '''
-    model = Net(
-        backbone=AlexNet(args=self.maml_args),
-        head=SiamFC(args=self.maml_args))
-    self.load_pretrain()
-
-    if torch.cuda.is_available():
-        self.state_dict = torch.load(filepath, map_location="cuda:0")
-    else:
-        self.state_dict = torch.load(filepath, map_location="cpu")
-    # model weight parsing
-    oldkey = []
-    with torch.no_grad():
-        self.tmp_model = self.state_dict.copy()
-        for key in self.tmp_model.keys():
-            key_split = key.split(".")
-            if key_split[0] != 'head':
-                if key_split[2] == '0':
-                    key_split[2] = "conv"
-                elif key_split[2] == '1':
-                    key_split[2] = "norm_layer"
-                str = "."
-                new_key = str.join(key_split)
-                self.state_dict[new_key] = self.tmp_model[key]
-                oldkey.append(key)
-        for key in oldkey:
-            del self.state_dict[key]
-        self.model.load_state_dict(self.state_dict, strict=False)
-    '''
 
 # =============================================================================
 #         root_dir = 'E:/VID_val_100/Data'
@@ -60,12 +31,6 @@ if __name__ == '__main__':
 #         VID_exp.report([tracker.name])
 # =============================================================================
 
-'''
-root_dir = '../dataset/VOT2016'
-VOT16_exp = ExperimentVOT(root_dir, version=2016, experiments='supervised', read_image=False)
-VOT16_exp.run(tracker, visualize=False)
-#        p, ious, fail = VOT16_exp.report([tracker.name])
-'''
 # testing pretrain
 # =============================================================================
 #for idx in range(30, 49):
@@ -78,8 +43,8 @@ VOT16_exp.run(tracker, visualize=False)
 
 
 for idx in range(22, 51):
-    net_path = './checkpoints/codecleaning2/siamfc_alexnet_e{}.pth'.format(idx)
-    tracker = TrackerSiamFC(net_path=net_path, name='codecleaning_e{}'.format(idx))
+    net_path = './checkpoints/codecleaning_IV/siamfc_alexnet_e{}.pth'.format(idx)
+    tracker = TrackerSiamFC(net_path=net_path, name='codecleaning_test{}'.format(idx))
     root_dir = '../dataset/VOT2018'
     VOT_exp = ExperimentVOT(root_dir, version=2018, experiments='supervised', read_image=False)
     VOT_exp.run(tracker, visualize=False)
