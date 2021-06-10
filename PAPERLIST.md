@@ -10,7 +10,7 @@
 * UNSUPERVISED LEARNING VIA META-LEARNING [paper](https://arxiv.org/pdf/1810.02334.pdf)
 * UNSUPERVISED META-LEARNING FOR FEW-SHOT IMAGE CLASSIFICATION [paper](https://arxiv.org/pdf/1811.11819.pdf)
 * Keep Learning: Self-supervised Meta-learning for Learning from Inference [paper](https://www.aclweb.org/anthology/2021.eacl-main.6.pdf)
-* AutoAugment: Learning Augmentation Strategies from Data [paper](https://arxiv.org/pdf/1811.11819.pdf)
+* AutoAugment: Learning Augmentation Strategies from Data [paper](https://openaccess.thecvf.com/content_CVPR_2019/papers/Cubuk_AutoAugment_Learning_Augmentation_Strategies_From_Data_CVPR_2019_paper.pdf)
 # support set and testing set design examples
 * Learning Meta Face Recognition in Unseen Domains [paper](https://arxiv.org/pdf/2003.07733.pdf)
 * Meta-Dataset: A Dataset of Datasets for Learning to Learn from Few Examples [paper](https://arxiv.org/pdf/1903.03096.pdf)
